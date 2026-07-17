@@ -10,11 +10,12 @@ from PyQt6.QtWidgets import (
 )
 
 from app.authentication import create_account, login
+from app.dashboard_window import DashboardWindow
 
 
 class CreateAccountDialog(QDialog):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
         self.setWindowTitle("Create Account")
         self.setFixedSize(350, 220)
@@ -25,7 +26,9 @@ class CreateAccountDialog(QDialog):
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
 
         self.confirm_password = QLineEdit()
-        self.confirm_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.confirm_password.setEchoMode(
+            QLineEdit.EchoMode.Password
+        )
 
         self.create_button = QPushButton("Create Account")
         self.cancel_button = QPushButton("Cancel")
@@ -71,10 +74,12 @@ class LoginWindow(QWidget):
     def __init__(self):
         super().__init__()
 
+        self.dashboard = None
+
         self.setWindowTitle("Remote Lab Platform")
         self.setFixedSize(350, 250)
 
-        self.title = QLabel("Remote Laboratory Platform")
+        title = QLabel("Remote Laboratory Platform")
 
         self.username = QLineEdit()
         self.username.setPlaceholderText("Username")
@@ -83,24 +88,20 @@ class LoginWindow(QWidget):
         self.password.setPlaceholderText("Password")
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
 
-        self.login_button = QPushButton("Log In")
-        self.create_button = QPushButton("Create Account")
-        self.logout_button = QPushButton("Log Out")
-        self.logout_button.hide()
+        login_button = QPushButton("Log In")
+        create_button = QPushButton("Create Account")
 
         layout = QVBoxLayout()
-        layout.addWidget(self.title)
+        layout.addWidget(title)
         layout.addWidget(self.username)
         layout.addWidget(self.password)
-        layout.addWidget(self.login_button)
-        layout.addWidget(self.create_button)
-        layout.addWidget(self.logout_button)
+        layout.addWidget(login_button)
+        layout.addWidget(create_button)
 
         self.setLayout(layout)
 
-        self.login_button.clicked.connect(self.log_in)
-        self.create_button.clicked.connect(self.open_create_account)
-        self.logout_button.clicked.connect(self.log_out)
+        login_button.clicked.connect(self.log_in)
+        create_button.clicked.connect(self.open_create_account)
         self.password.returnPressed.connect(self.log_in)
 
     def log_in(self):
@@ -117,30 +118,19 @@ class LoginWindow(QWidget):
             )
             return
 
-        self.title.setText(
-            f"Logged in as {user['username']} ({user['role']})"
-        )
+        self.dashboard = DashboardWindow(user)
+        self.dashboard.logged_out.connect(self.return_to_login)
+        self.dashboard.show()
 
-        self.username.hide()
-        self.password.hide()
-        self.login_button.hide()
-        self.create_button.hide()
-        self.logout_button.show()
+        self.hide()
 
     def open_create_account(self):
-        dialog = CreateAccountDialog()
+        dialog = CreateAccountDialog(self)
 
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.username.setText(dialog.username.text())
             self.password.clear()
 
-    def log_out(self):
-        self.username.clear()
+    def return_to_login(self):
         self.password.clear()
-        self.title.setText("Remote Laboratory Platform")
-
-        self.username.show()
-        self.password.show()
-        self.login_button.show()
-        self.create_button.show()
-        self.logout_button.hide()
+        self.show()
