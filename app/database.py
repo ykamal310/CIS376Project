@@ -69,6 +69,24 @@ def create_tables():
         """
     )
 
+    equipment_count = connection.execute(
+        "SELECT COUNT(*) FROM equipment"
+    ).fetchone()[0]
+
+    if equipment_count == 0:
+        connection.executemany(
+            """
+            INSERT INTO equipment (name)
+            VALUES (?)
+            """,
+            [
+                ("Chemistry Workstation",),
+                ("Electronics Workbench",),
+                ("Physics Simulation Station",)
+            ]
+        )
+
+    connection.commit()
     connection.close()
 
 
@@ -113,3 +131,176 @@ def get_user(username):
 
     connection.close()
     return user
+
+
+def get_available_equipment():
+    connection = get_connection()
+
+    equipment = connection.execute(
+        """
+        SELECT * FROM equipment
+        WHERE status = 'Available'
+        ORDER BY name
+        """
+    ).fetchall()
+
+    connection.close()
+    return equipment
+
+
+def reservation_conflicts(
+    equipment_id,
+    reservation_date,
+    start_time,
+    end_time
+):
+    connection = get_connection()
+
+    conflict = connection.execute(
+        """
+        SELECT id FROM reservations
+        WHERE equipment_id = ?
+        AND reservation_date = ?
+        AND status = 'Scheduled'
+        AND start_time < ?
+        AND end_time > ?
+        """,
+        (
+            equipment_id,
+            reservation_date,
+            end_time,
+            start_time
+        )
+    ).fetchone()
+
+    connection.close()
+    return conflict is not None
+
+
+def add_reservation(
+    user_id,
+    equipment_id,
+    reservation_date,
+    start_time,
+    end_time
+):
+    connection = get_connection()
+
+    cursor = connection.execute(
+        """
+        INSERT INTO reservations (
+            user_id,
+            equipment_id,
+            reservation_date,
+            start_time,
+            end_time
+        )
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            user_id,
+            equipment_id,
+            reservation_date,
+            start_time,
+            end_time
+        )
+    )
+
+    connection.commit()
+    reservation_id = cursor.lastrowid
+    connection.close()
+
+    return reservation_id
+
+
+def get_user_reservations(user_id):
+    connection = get_connection()
+
+    reservations = connection.execute(
+        """
+        SELECT
+            reservations.id,
+            reservations.reservation_date,
+            reservations.start_time,
+            reservations.end_time,
+            reservations.status,
+            equipment.name AS equipment_name
+        FROM reservations
+        JOIN equipment
+        ON reservations.equipment_id = equipment.id
+        WHERE reservations.user_id = ?
+        ORDER BY reservation_date, start_time
+        """,
+        (user_id,)
+    ).fetchall()
+
+    connection.close()
+    return reservations
+
+
+def get_reservation(reservation_id, user_id):
+    connection = get_connection()
+
+    reservation = connection.execute(
+        """
+        SELECT * FROM reservations
+        WHERE id = ?
+        AND user_id = ?
+        """,
+        (reservation_id, user_id)
+    ).fetchone()
+
+    connection.close()
+    return reservation
+
+
+def cancel_reservation(reservation_id, user_id):
+    connection = get_connection()
+
+    cursor = connection.execute(
+        """
+        UPDATE reservations
+        SET status = 'Cancelled'
+        WHERE id = ?
+        AND user_id = ?
+        AND status = 'Scheduled'
+        """,
+        (reservation_id, user_id)
+    )
+
+    connection.commit()
+    cancelled = cursor.rowcount > 0
+    connection.close()
+
+    return cancelled
+
+
+def get_time_budget(user_id):
+    connection = get_connection()
+
+    budget = connection.execute(
+        """
+        SELECT * FROM time_budgets
+        WHERE user_id = ?
+        """,
+        (user_id,)
+    ).fetchone()
+
+    connection.close()
+    return budget
+
+
+def update_used_minutes(user_id, minutes):
+    connection = get_connection()
+
+    connection.execute(
+        """
+        UPDATE time_budgets
+        SET used_minutes = MAX(0, used_minutes + ?)
+        WHERE user_id = ?
+        """,
+        (minutes, user_id)
+    )
+
+    connection.commit()
+    connection.close()
