@@ -6,12 +6,17 @@ from PyQt6.QtWidgets import (
     QPushButton
 )
 
+from app.reservation_window import ReservationWindow
+
 
 class DashboardWindow(QWidget):
     logged_out = pyqtSignal()
 
     def __init__(self, user):
         super().__init__()
+
+        self.user = user
+        self.reservation_window = None
 
         self.setWindowTitle("Remote Lab Dashboard")
         self.setFixedSize(400, 350)
@@ -36,8 +41,22 @@ class DashboardWindow(QWidget):
 
         self.setLayout(layout)
 
+        reservations_button.clicked.connect(
+            self.open_reservations
+        )
+
         logout_button.clicked.connect(self.logout)
 
+    def open_reservations(self):
+        self.reservation_window = ReservationWindow(
+            self.user
+        )
+
+        self.reservation_window.show()
+
     def logout(self):
+        if self.reservation_window:
+            self.reservation_window.close()
+
         self.logged_out.emit()
         self.close()
