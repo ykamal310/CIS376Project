@@ -66,6 +66,20 @@ def create_tables():
             used_minutes INTEGER DEFAULT 0,
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
+
+                CREATE TABLE IF NOT EXISTS lab_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            reservation_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            started_at TEXT NOT NULL,
+            ended_at TEXT,
+            status TEXT DEFAULT 'Active',
+            FOREIGN KEY (reservation_id)
+                REFERENCES reservations(id),
+            FOREIGN KEY (user_id)
+                REFERENCES users(id)
+        );
+
         """
     )
 
@@ -300,6 +314,96 @@ def update_used_minutes(user_id, minutes):
         WHERE user_id = ?
         """,
         (minutes, user_id)
+    )
+
+    connection.commit()
+    connection.close()
+
+def start_lab_session(
+    reservation_id,
+    user_id,
+    started_at
+):
+    connection = get_connection()
+
+    existing_session = connection.execute(
+        """
+        SELECT id FROM lab_sessions
+        WHERE reservation_id = ?
+        AND user_id = ?
+        AND status = 'Active'
+        """,
+        (
+            reservation_id,
+            user_id
+        )
+    ).fetchone()
+
+    if existing_session:
+        connection.close()
+        return existing_session["id"]
+
+    cursor = connection.execute(
+        """
+        INSERT INTO lab_sessions (
+            reservation_id,
+            user_id,
+            started_at
+        )
+        VALUES (?, ?, ?)
+        """,
+        (
+            reservation_id,
+            user_id,
+            started_at
+        )
+    )
+
+    connection.commit()
+    session_id = cursor.lastrowid
+    connection.close()
+
+    return session_id
+
+
+def end_lab_session(
+    session_id,
+    ended_at
+):
+    connection = get_connection()
+
+    cursor = connection.execute(
+        """
+        UPDATE lab_sessions
+        SET ended_at = ?,
+            status = 'Completed'
+        WHERE id = ?
+        AND status = 'Active'
+        """,
+        (
+            ended_at,
+            session_id
+        )
+    )
+
+    connection.commit()
+    updated = cursor.rowcount > 0
+    connection.close()
+
+    return updated
+
+
+def complete_reservation(reservation_id):
+    connection = get_connection()
+
+    connection.execute(
+        """
+        UPDATE reservations
+        SET status = 'Completed'
+        WHERE id = ?
+        AND status = 'Scheduled'
+        """,
+        (reservation_id,)
     )
 
     connection.commit()
