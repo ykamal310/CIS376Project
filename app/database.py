@@ -516,3 +516,63 @@ def save_experiment_result(
     connection.close()
 
     return result_id
+
+def get_user_reservation_history(user_id):
+    connection = get_connection()
+
+    reservations = connection.execute(
+        """
+        SELECT
+            reservations.id,
+            reservations.reservation_date,
+            reservations.start_time,
+            reservations.end_time,
+            reservations.status,
+            equipment.name AS equipment_name
+        FROM reservations
+        JOIN equipment
+        ON reservations.equipment_id = equipment.id
+        WHERE reservations.user_id = ?
+        AND (
+            reservations.status != 'Scheduled'
+            OR datetime(
+                reservations.reservation_date
+                || ' '
+                || reservations.end_time
+            ) < datetime('now', 'localtime')
+        )
+        ORDER BY
+            reservations.reservation_date DESC,
+            reservations.start_time DESC
+        """,
+        (user_id,)
+    ).fetchall()
+
+    connection.close()
+    return reservations
+
+
+def get_user_experiment_results(user_id):
+    connection = get_connection()
+
+    results = connection.execute(
+        """
+        SELECT
+            experiment_results.id,
+            experiment_results.reservation_id,
+            experiment_results.result,
+            experiment_results.created_at,
+            experiments.name AS experiment_name
+        FROM experiment_results
+        JOIN experiments
+        ON experiment_results.experiment_id = experiments.id
+        WHERE experiment_results.user_id = ?
+        ORDER BY
+            experiment_results.created_at DESC,
+            experiment_results.id DESC
+        """,
+        (user_id,)
+    ).fetchall()
+
+    connection.close()
+    return results
