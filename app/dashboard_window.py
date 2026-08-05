@@ -13,6 +13,8 @@ from app.experiment_window import ExperimentWindow
 from app.reservation_window import ReservationWindow
 from app.session_manager import begin_session
 
+from app.history_window import HistoryWindow
+
 
 class DashboardWindow(QWidget):
     logged_out = pyqtSignal()
@@ -24,6 +26,7 @@ class DashboardWindow(QWidget):
 
         self.reservation_window = None
         self.experiment_window = None
+        self.history_window = None
 
         self.setWindowTitle(
             "Remote Lab Dashboard"
@@ -75,7 +78,7 @@ class DashboardWindow(QWidget):
             and user["role"] == "Student"
         ):
             debug_button = QPushButton(
-                "Debug: Launch Test Session"
+                "Debug test session"
             )
 
             layout.addWidget(debug_button)
@@ -90,15 +93,19 @@ class DashboardWindow(QWidget):
 
         reservations_button.clicked.connect(
             self.open_reservations
-        )
+    )
 
         experiments_button.clicked.connect(
             self.open_experiment
-        )
+)
+
+        history_button.clicked.connect(
+            self.open_history
+            )
 
         logout_button.clicked.connect(
             self.logout
-        )
+     )
 
     def open_reservations(self):
         if (
@@ -174,12 +181,30 @@ class DashboardWindow(QWidget):
 
         self.experiment_window.show()
 
+    def open_history(self):
+        if (
+            self.history_window
+            and self.history_window.isVisible()
+        ):
+            self.history_window.raise_()
+            self.history_window.activateWindow()
+            return
+
+        self.history_window = HistoryWindow(
+            self.user
+        )
+
+        self.history_window.show()
+
     def logout(self):
         if self.reservation_window:
             self.reservation_window.close()
 
         if self.experiment_window:
             self.experiment_window.close()
+
+        if self.history_window:
+            self.history_window.close()
 
         self.logged_out.emit()
         self.close()
