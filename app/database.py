@@ -55,9 +55,12 @@ def create_tables():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             experiment_id INTEGER NOT NULL,
+            reservation_id INTEGER,
             result TEXT NOT NULL,
+            created_at TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id),
-            FOREIGN KEY (experiment_id) REFERENCES experiments(id)
+            FOREIGN KEY (experiment_id) REFERENCES experiments(id),
+            FOREIGN KEY (reservation_id) REFERENCES reservations(id)
         );
 
         CREATE TABLE IF NOT EXISTS time_budgets (
@@ -83,6 +86,29 @@ def create_tables():
         """
     )
 
+    result_columns = {
+        column["name"]
+        for column in connection.execute(
+            "PRAGMA table_info(experiment_results)"
+        ).fetchall()
+    }
+
+    if "reservation_id" not in result_columns:
+        connection.execute(
+            """
+            ALTER TABLE experiment_results
+            ADD COLUMN reservation_id INTEGER
+            """
+        )
+
+    if "created_at" not in result_columns:
+        connection.execute(
+            """
+            ALTER TABLE experiment_results
+            ADD COLUMN created_at TEXT
+            """
+        )
+
     equipment_count = connection.execute(
         "SELECT COUNT(*) FROM equipment"
     ).fetchone()[0]
@@ -97,6 +123,37 @@ def create_tables():
                 ("Chemistry Workstation",),
                 ("Electronics Workbench",),
                 ("Physics Simulation Station",)
+            ]
+        )
+
+    experiment_count = connection.execute(
+        "SELECT COUNT(*) FROM experiments"
+    ).fetchone()[0]
+
+    if experiment_count == 0:
+        connection.executemany(
+            """
+            INSERT INTO experiments (
+                name,
+                description
+            )
+            VALUES (?, ?)
+            """,
+            [
+                (
+                    "Ohm's Law",
+                    (
+                        "Calculate electrical current using "
+                        "voltage and resistance."
+                    )
+                ),
+                (
+                    "Pendulum Period",
+                    (
+                        "Calculate the period of a pendulum "
+                        "using length and gravitational acceleration."
+                    )
+                )
             ]
         )
 
@@ -408,3 +465,54 @@ def complete_reservation(reservation_id):
 
     connection.commit()
     connection.close()
+
+
+def get_experiments():
+    connection = get_connection()
+
+    experiments = connection.execute(
+        """
+        SELECT *
+        FROM experiments
+        ORDER BY name
+        """
+    ).fetchall()
+
+    connection.close()
+    return experiments
+
+
+def save_experiment_result(
+    user_id,
+    experiment_id,
+    reservation_id,
+    result,
+    created_at
+):
+    connection = get_connection()
+
+    cursor = connection.execute(
+        """
+        INSERT INTO experiment_results (
+            user_id,
+            experiment_id,
+            reservation_id,
+            result,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            user_id,
+            experiment_id,
+            reservation_id,
+            result,
+            created_at
+        )
+    )
+
+    connection.commit()
+    result_id = cursor.lastrowid
+    connection.close()
+
+    return result_id
