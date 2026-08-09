@@ -112,9 +112,7 @@ def create_tables():
 
     equipment_columns = {
         column["name"]
-        for column in connection.execute(
-            "PRAGMA table_info(equipment)"
-        ).fetchall()
+        for column in connection.execute("PRAGMA table_info(equipment)").fetchall()
     }
 
     if "active" not in equipment_columns:
@@ -127,9 +125,7 @@ def create_tables():
 
     result_columns = {
         column["name"]
-        for column in connection.execute(
-            "PRAGMA table_info(experiment_results)"
-        ).fetchall()
+        for column in connection.execute("PRAGMA table_info(experiment_results)").fetchall()
     }
 
     if "reservation_id" not in result_columns:
@@ -150,9 +146,7 @@ def create_tables():
 
     budget_columns = {
         column["name"]
-        for column in connection.execute(
-            "PRAGMA table_info(time_budgets)"
-        ).fetchall()
+        for column in connection.execute("PRAGMA table_info(time_budgets)").fetchall()
     }
 
     if "week_start" not in budget_columns:
@@ -1035,10 +1029,7 @@ def get_or_create_experiment(name, description):
         )
         VALUES (?, ?)
         """,
-        (
-            name,
-            description
-        )
+        (name, description)
     )
 
     connection.commit()
@@ -1049,16 +1040,8 @@ def get_or_create_experiment(name, description):
 
     return experiment_id
 
-def sync_equipment_catalog(
-    equipment_names
-):
-    unique_names = sorted(
-        {
-            name.strip()
-            for name in equipment_names
-            if name and name.strip()
-        }
-    )
+def sync_equipment_catalog(equipment_names):
+    unique_names = sorted({name.strip() for name in equipment_names if name and name.strip()})
 
     connection = get_connection()
 

@@ -13,15 +13,9 @@ from app.database import (
 
 
 if getattr(sys, "frozen", False):
-    EXPERIMENT_FOLDER = (
-        Path(sys.executable).resolve().parent
-        / "experiments"
-    )
+    EXPERIMENT_FOLDER = (Path(sys.executable).resolve().parent / "experiments")
 else:
-    EXPERIMENT_FOLDER = (
-        Path(__file__).resolve().parent
-        / "experiments"
-    )
+    EXPERIMENT_FOLDER = (Path(__file__).resolve().parent / "experiments")
 
 
 def discover_experiments():
@@ -30,33 +24,21 @@ def discover_experiments():
     if not EXPERIMENT_FOLDER.exists():
         return modules
 
-    for file_path in EXPERIMENT_FOLDER.glob(
-        "*.py"
-    ):
+    for file_path in EXPERIMENT_FOLDER.glob("*.py"):
         if file_path.name.startswith("_"):
             continue
 
         try:
-            module_name = (
-                "remote_lab_experiment_"
-                f"{file_path.stem}"
-            )
+            module_name = ("remote_lab_experiment_" f"{file_path.stem}")
 
-            spec = importlib.util.spec_from_file_location(
-                module_name,
-                file_path
-            )
+            spec = importlib.util.spec_from_file_location(module_name, file_path)
 
             if not spec or not spec.loader:
                 continue
 
-            module = importlib.util.module_from_spec(
-                spec
-            )
+            module = importlib.util.module_from_spec(spec)
 
-            spec.loader.exec_module(
-                module
-            )
+            spec.loader.exec_module(module)
 
             module.NAME
             module.DESCRIPTION
@@ -64,15 +46,10 @@ def discover_experiments():
             module.FIELDS
             module.run
 
-            modules.append(
-                module
-            )
+            modules.append(module)
 
         except Exception as error:
-            print(
-                f"Could not load experiment "
-                f"{file_path.name}: {error}"
-            )
+            print(f"Could not load experiment " f"{file_path.name}: {error}")
 
     return modules
 
@@ -80,20 +57,12 @@ def discover_experiments():
 def sync_experiment_catalog():
     modules = discover_experiments()
 
-    equipment_names = [
-        module.EQUIPMENT
-        for module in modules
-    ]
+    equipment_names = [module.EQUIPMENT for module in modules]
 
-    sync_equipment_catalog(
-        equipment_names
-    )
+    sync_equipment_catalog(equipment_names)
 
     for module in modules:
-        get_or_create_experiment(
-            module.NAME,
-            module.DESCRIPTION
-        )
+        get_or_create_experiment(module.NAME, module.DESCRIPTION)
 
     return len(modules)
 
@@ -104,10 +73,7 @@ def load_experiments():
     modules = discover_experiments()
 
     for module in modules:
-        experiment_id = get_or_create_experiment(
-            module.NAME,
-            module.DESCRIPTION
-        )
+        experiment_id = get_or_create_experiment(module.NAME, module.DESCRIPTION)
 
         experiments[module.NAME] = {
             "id": experiment_id,
@@ -121,33 +87,22 @@ def load_experiments():
     return experiments
 
 
-def get_available_experiments(
-    equipment_name
-):
+def get_available_experiments(equipment_name):
     experiments = load_experiments()
 
     available = []
 
     for experiment in experiments.values():
-        if (
-            experiment["equipment"]
-            == equipment_name
-        ):
-            available.append(
-                experiment
-            )
+        if (experiment["equipment"] == equipment_name):
+            available.append(experiment)
 
     return available
 
 
-def get_experiment_fields(
-    experiment_name
-):
+def get_experiment_fields(experiment_name):
     experiments = load_experiments()
 
-    experiment = experiments.get(
-        experiment_name
-    )
+    experiment = experiments.get(experiment_name)
 
     if not experiment:
         return (
@@ -165,9 +120,7 @@ def run_experiment(
 ):
     experiments = load_experiments()
 
-    experiment = experiments.get(
-        experiment_name
-    )
+    experiment = experiments.get(experiment_name)
 
     if not experiment:
         return (
@@ -187,9 +140,7 @@ def store_experiment_result(
     experiment_id,
     result
 ):
-    created_at = datetime.now().isoformat(
-        timespec="seconds"
-    )
+    created_at = datetime.now().isoformat(timespec="seconds")
 
     stored_result = {
         "experiment": result["experiment_name"],

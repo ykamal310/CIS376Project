@@ -40,13 +40,9 @@ class ExperimentWindow(QWidget):
 
         title = QLabel("Remote Laboratory Experiment")
 
-        student_label = QLabel(
-            f"Student: {user['username']}"
-        )
+        student_label = QLabel(f"Student: {user['username']}")
 
-        equipment_label = QLabel(
-            f"Equipment: {session['equipment_name']}"
-        )
+        equipment_label = QLabel(f"Equipment: {session['equipment_name']}")
 
         reservation_label = QLabel(
             (
@@ -67,35 +63,21 @@ class ExperimentWindow(QWidget):
         self.second_input_label = QLabel()
         self.second_input = QLineEdit()
 
-        self.run_button = QPushButton(
-            "Run Experiment"
-        )
+        self.run_button = QPushButton("Run Experiment")
 
-        self.save_button = QPushButton(
-            "Save Result"
-        )
+        self.save_button = QPushButton("Save Result")
 
         self.save_button.setEnabled(False)
 
-        self.result_label = QLabel(
-            "Run an experiment to view the result."
-        )
+        self.result_label = QLabel("Run an experiment to view the result.")
 
-        self.figure = Figure(
-            figsize=(6, 3)
-        )
+        self.figure = Figure(figsize=(6, 3))
 
-        self.canvas = FigureCanvas(
-            self.figure
-        )
+        self.canvas = FigureCanvas(self.figure)
 
-        self.axes = self.figure.add_subplot(
-            111
-        )
+        self.axes = self.figure.add_subplot(111)
 
-        end_button = QPushButton(
-            "End Session"
-        )
+        end_button = QPushButton("End Session")
 
         experiment_form = QFormLayout()
         experiment_form.addRow(
@@ -126,29 +108,19 @@ class ExperimentWindow(QWidget):
 
         self.setLayout(layout)
 
-        self.experiment_combo.currentIndexChanged.connect(
-            self.update_experiment_inputs
-        )
+        self.experiment_combo.currentIndexChanged.connect(self.update_experiment_inputs)
 
-        self.run_button.clicked.connect(
-            self.run_selected_experiment
-        )
+        self.run_button.clicked.connect(self.run_selected_experiment)
 
-        self.save_button.clicked.connect(
-            self.save_current_result
-        )
+        self.save_button.clicked.connect(self.save_current_result)
 
-        end_button.clicked.connect(
-            self.end_session_early
-        )
+        end_button.clicked.connect(self.end_session_early)
 
         self.load_experiments()
 
         self.timer = QTimer(self)
 
-        self.timer.timeout.connect(
-            self.update_remaining_time
-        )
+        self.timer.timeout.connect(self.update_remaining_time)
 
         self.timer.start(1000)
 
@@ -157,13 +129,9 @@ class ExperimentWindow(QWidget):
     def load_experiments(self):
         self.experiment_combo.clear()
 
-        equipment_name = (
-            self.session["equipment_name"]
-        )
+        equipment_name = (self.session["equipment_name"])
 
-        experiments = get_available_experiments(
-            equipment_name
-        )
+        experiments = get_available_experiments(equipment_name)
 
         for experiment in experiments:
             self.experiment_combo.addItem(
@@ -171,13 +139,9 @@ class ExperimentWindow(QWidget):
                 experiment["id"]
             )
 
-        has_experiments = (
-            self.experiment_combo.count() > 0
-        )
+        has_experiments = (self.experiment_combo.count() > 0)
 
-        self.run_button.setEnabled(
-            has_experiments
-        )
+        self.run_button.setEnabled(has_experiments)
 
         if not has_experiments:
             self.result_label.setText(
@@ -190,14 +154,10 @@ class ExperimentWindow(QWidget):
         self.update_experiment_inputs()
 
     def update_experiment_inputs(self):
-        experiment_name = (
-            self.experiment_combo.currentText()
-        )
+        experiment_name = (self.experiment_combo.currentText())
 
         if not experiment_name:
-            self.first_input_label.setText(
-                "First Value:"
-            )
+            self.first_input_label.setText("First Value:")
 
             self.second_input_label.setText(
                 "Second Value:"
