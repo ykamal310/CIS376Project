@@ -9,7 +9,13 @@ from app.login_window import LoginWindow
 
 create_tables()
 
-#create_account ("admin", "admin, "Administrator")
+success, message = create_account(
+    "adm",
+    "adm",
+    "Administrator"
+)
+
+print("Admin setup:", success, message)
 
 app = QApplication(sys.argv)
 
