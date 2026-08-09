@@ -1,18 +1,55 @@
 import sqlite3
+import sys
+
+from datetime import date, timedelta
 from pathlib import Path
 
 
-DATABASE = Path("data/remote_lab.db")
+if getattr(sys, "frozen", False):
+    BASE_FOLDER = Path(sys.executable).parent
+else:
+    BASE_FOLDER = Path(__file__).resolve().parent.parent
+
+
+DATABASE = BASE_FOLDER / "data" / "remote_lab.db"
 
 
 def get_connection():
-    DATABASE.parent.mkdir(exist_ok=True)
+    DATABASE.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
-    connection = sqlite3.connect(DATABASE)
+    connection = sqlite3.connect(
+        DATABASE,
+        timeout=5
+    )
+
     connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
+
+    connection.execute(
+        "PRAGMA foreign_keys = ON"
+    )
+
+    connection.execute(
+        "PRAGMA busy_timeout = 5000"
+    )
+
+    connection.execute(
+        "PRAGMA journal_mode = WAL"
+    )
 
     return connection
+
+
+def get_current_week_start():
+    today = date.today()
+
+    monday = today - timedelta(
+        days=today.weekday()
+    )
+
+    return monday.isoformat()
 
 
 def create_tables():
@@ -67,10 +104,11 @@ def create_tables():
             user_id INTEGER PRIMARY KEY,
             weekly_minutes INTEGER DEFAULT 300,
             used_minutes INTEGER DEFAULT 0,
+            week_start TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
 
-                CREATE TABLE IF NOT EXISTS lab_sessions (
+        CREATE TABLE IF NOT EXISTS lab_sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             reservation_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
@@ -82,7 +120,6 @@ def create_tables():
             FOREIGN KEY (user_id)
                 REFERENCES users(id)
         );
-
         """
     )
 
@@ -108,6 +145,30 @@ def create_tables():
             ADD COLUMN created_at TEXT
             """
         )
+
+    budget_columns = {
+        column["name"]
+        for column in connection.execute(
+            "PRAGMA table_info(time_budgets)"
+        ).fetchall()
+    }
+
+    if "week_start" not in budget_columns:
+        connection.execute(
+            """
+            ALTER TABLE time_budgets
+            ADD COLUMN week_start TEXT
+            """
+        )
+
+    connection.execute(
+        """
+        UPDATE time_budgets
+        SET week_start = ?
+        WHERE week_start IS NULL
+        """,
+        (get_current_week_start(),)
+    )
 
     equipment_count = connection.execute(
         "SELECT COUNT(*) FROM equipment"
@@ -176,10 +237,16 @@ def add_user(username, password, role):
         if role == "Student":
             connection.execute(
                 """
-                INSERT INTO time_budgets (user_id)
-                VALUES (?)
+                INSERT INTO time_budgets (
+                    user_id,
+                    week_start
+                )
+                VALUES (?, ?)
                 """,
-                (cursor.lastrowid,)
+                (
+                    cursor.lastrowid,
+                    get_current_week_start()
+                )
             )
 
         connection.commit()
@@ -196,7 +263,11 @@ def get_user(username):
     connection = get_connection()
 
     user = connection.execute(
-        "SELECT * FROM users WHERE username = ?",
+        """
+        SELECT *
+        FROM users
+        WHERE username = ?
+        """,
         (username,)
     ).fetchone()
 
@@ -209,7 +280,8 @@ def get_available_equipment():
 
     equipment = connection.execute(
         """
-        SELECT * FROM equipment
+        SELECT *
+        FROM equipment
         WHERE status = 'Available'
         ORDER BY name
         """
@@ -229,7 +301,8 @@ def reservation_conflicts(
 
     conflict = connection.execute(
         """
-        SELECT id FROM reservations
+        SELECT id
+        FROM reservations
         WHERE equipment_id = ?
         AND reservation_date = ?
         AND status = 'Scheduled'
@@ -245,6 +318,7 @@ def reservation_conflicts(
     ).fetchone()
 
     connection.close()
+
     return conflict is not None
 
 
@@ -257,31 +331,63 @@ def add_reservation(
 ):
     connection = get_connection()
 
-    cursor = connection.execute(
-        """
-        INSERT INTO reservations (
-            user_id,
-            equipment_id,
-            reservation_date,
-            start_time,
-            end_time
+    try:
+        connection.execute(
+            "BEGIN IMMEDIATE"
         )
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (
-            user_id,
-            equipment_id,
-            reservation_date,
-            start_time,
-            end_time
+
+        conflict = connection.execute(
+            """
+            SELECT id
+            FROM reservations
+            WHERE equipment_id = ?
+            AND reservation_date = ?
+            AND status = 'Scheduled'
+            AND start_time < ?
+            AND end_time > ?
+            """,
+            (
+                equipment_id,
+                reservation_date,
+                end_time,
+                start_time
+            )
+        ).fetchone()
+
+        if conflict:
+            connection.rollback()
+            return None
+
+        cursor = connection.execute(
+            """
+            INSERT INTO reservations (
+                user_id,
+                equipment_id,
+                reservation_date,
+                start_time,
+                end_time
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                equipment_id,
+                reservation_date,
+                start_time,
+                end_time
+            )
         )
-    )
 
-    connection.commit()
-    reservation_id = cursor.lastrowid
-    connection.close()
+        connection.commit()
 
-    return reservation_id
+        return cursor.lastrowid
+
+    except sqlite3.Error:
+        connection.rollback()
+        return None
+
+    finally:
+        connection.close()
 
 
 def get_user_reservations(user_id):
@@ -314,11 +420,15 @@ def get_reservation(reservation_id, user_id):
 
     reservation = connection.execute(
         """
-        SELECT * FROM reservations
+        SELECT *
+        FROM reservations
         WHERE id = ?
         AND user_id = ?
         """,
-        (reservation_id, user_id)
+        (
+            reservation_id,
+            user_id
+        )
     ).fetchone()
 
     connection.close()
@@ -336,13 +446,17 @@ def cancel_reservation(reservation_id, user_id):
         AND user_id = ?
         AND status = 'Scheduled'
         """,
-        (reservation_id, user_id)
+        (
+            reservation_id,
+            user_id
+        )
     )
 
     connection.commit()
-    cancelled = cursor.rowcount > 0
-    connection.close()
 
+    cancelled = cursor.rowcount > 0
+
+    connection.close()
     return cancelled
 
 
@@ -351,30 +465,72 @@ def get_time_budget(user_id):
 
     budget = connection.execute(
         """
-        SELECT * FROM time_budgets
+        SELECT *
+        FROM time_budgets
         WHERE user_id = ?
         """,
         (user_id,)
     ).fetchone()
 
+    if not budget:
+        connection.close()
+        return None
+
+    current_week = get_current_week_start()
+
+    if budget["week_start"] != current_week:
+        connection.execute(
+            """
+            UPDATE time_budgets
+            SET used_minutes = 0,
+                week_start = ?
+            WHERE user_id = ?
+            """,
+            (
+                current_week,
+                user_id
+            )
+        )
+
+        connection.commit()
+
+        budget = connection.execute(
+            """
+            SELECT *
+            FROM time_budgets
+            WHERE user_id = ?
+            """,
+            (user_id,)
+        ).fetchone()
+
     connection.close()
+
     return budget
 
 
 def update_used_minutes(user_id, minutes):
+    get_time_budget(user_id)
+
     connection = get_connection()
 
     connection.execute(
         """
         UPDATE time_budgets
-        SET used_minutes = MAX(0, used_minutes + ?)
+        SET used_minutes = MAX(
+            0,
+            used_minutes + ?
+        )
         WHERE user_id = ?
         """,
-        (minutes, user_id)
+        (
+            minutes,
+            user_id
+        )
     )
 
     connection.commit()
     connection.close()
+
 
 def start_lab_session(
     reservation_id,
@@ -385,7 +541,8 @@ def start_lab_session(
 
     existing_session = connection.execute(
         """
-        SELECT id FROM lab_sessions
+        SELECT id
+        FROM lab_sessions
         WHERE reservation_id = ?
         AND user_id = ?
         AND status = 'Active'
@@ -398,6 +555,7 @@ def start_lab_session(
 
     if existing_session:
         connection.close()
+
         return existing_session["id"]
 
     cursor = connection.execute(
@@ -417,7 +575,9 @@ def start_lab_session(
     )
 
     connection.commit()
+
     session_id = cursor.lastrowid
+
     connection.close()
 
     return session_id
@@ -444,7 +604,9 @@ def end_lab_session(
     )
 
     connection.commit()
+
     updated = cursor.rowcount > 0
+
     connection.close()
 
     return updated
@@ -479,6 +641,7 @@ def get_experiments():
     ).fetchall()
 
     connection.close()
+
     return experiments
 
 
@@ -512,10 +675,13 @@ def save_experiment_result(
     )
 
     connection.commit()
+
     result_id = cursor.lastrowid
+
     connection.close()
 
     return result_id
+
 
 def get_user_reservation_history(user_id):
     connection = get_connection()
@@ -549,6 +715,7 @@ def get_user_reservation_history(user_id):
     ).fetchall()
 
     connection.close()
+
     return reservations
 
 
@@ -575,7 +742,9 @@ def get_user_experiment_results(user_id):
     ).fetchall()
 
     connection.close()
+
     return results
+
 
 def get_all_equipment():
     connection = get_connection()
@@ -589,10 +758,14 @@ def get_all_equipment():
     ).fetchall()
 
     connection.close()
+
     return equipment
 
 
-def update_equipment_status(equipment_id, new_status):
+def update_equipment_status(
+    equipment_id,
+    new_status
+):
     connection = get_connection()
 
     cursor = connection.execute(
@@ -601,11 +774,16 @@ def update_equipment_status(equipment_id, new_status):
         SET status = ?
         WHERE id = ?
         """,
-        (new_status, equipment_id)
+        (
+            new_status,
+            equipment_id
+        )
     )
 
     connection.commit()
+
     changed = cursor.rowcount > 0
+
     connection.close()
 
     return changed
@@ -637,10 +815,13 @@ def get_all_reservations():
     ).fetchall()
 
     connection.close()
+
     return reservations
 
 
-def get_reservation_for_admin(reservation_id):
+def get_reservation_for_admin(
+    reservation_id
+):
     connection = get_connection()
 
     reservation = connection.execute(
@@ -660,10 +841,13 @@ def get_reservation_for_admin(reservation_id):
     ).fetchone()
 
     connection.close()
+
     return reservation
 
 
-def mark_reservation_cancelled(reservation_id):
+def mark_reservation_cancelled(
+    reservation_id
+):
     connection = get_connection()
 
     cursor = connection.execute(
@@ -677,13 +861,34 @@ def mark_reservation_cancelled(reservation_id):
     )
 
     connection.commit()
+
     changed = cursor.rowcount > 0
+
     connection.close()
 
     return changed
 
+
 def get_all_users():
     connection = get_connection()
+
+    current_week = get_current_week_start()
+
+    connection.execute(
+        """
+        UPDATE time_budgets
+        SET used_minutes = 0,
+            week_start = ?
+        WHERE week_start IS NULL
+        OR week_start != ?
+        """,
+        (
+            current_week,
+            current_week
+        )
+    )
+
+    connection.commit()
 
     users = connection.execute(
         """
@@ -691,10 +896,14 @@ def get_all_users():
             users.id,
             users.username,
             users.role,
-            COALESCE(time_budgets.weekly_minutes, 0)
-                AS weekly_minutes,
-            COALESCE(time_budgets.used_minutes, 0)
-                AS used_minutes
+            COALESCE(
+                time_budgets.weekly_minutes,
+                0
+            ) AS weekly_minutes,
+            COALESCE(
+                time_budgets.used_minutes,
+                0
+            ) AS used_minutes
         FROM users
         LEFT JOIN time_budgets
         ON users.id = time_budgets.user_id
@@ -703,10 +912,14 @@ def get_all_users():
     ).fetchall()
 
     connection.close()
+
     return users
 
 
-def update_user_role(user_id, new_role):
+def update_user_role(
+    user_id,
+    new_role
+):
     connection = get_connection()
 
     cursor = connection.execute(
@@ -715,22 +928,27 @@ def update_user_role(user_id, new_role):
         SET role = ?
         WHERE id = ?
         """,
-        (new_role, user_id)
+        (
+            new_role,
+            user_id
+        )
     )
 
-    # if somebody becomes a student,
-    # make sure they have a time budget
     if new_role == "Student":
         connection.execute(
             """
             INSERT OR IGNORE INTO time_budgets (
                 user_id,
                 weekly_minutes,
-                used_minutes
+                used_minutes,
+                week_start
             )
-            VALUES (?, 300, 0)
+            VALUES (?, 300, 0, ?)
             """,
-            (user_id,)
+            (
+                user_id,
+                get_current_week_start()
+            )
         )
 
     connection.commit()
@@ -738,19 +956,27 @@ def update_user_role(user_id, new_role):
     changed = cursor.rowcount > 0
 
     connection.close()
+
     return changed
 
 
-def extend_time_budget(user_id, extra_minutes):
+def extend_time_budget(
+    user_id,
+    extra_minutes
+):
     connection = get_connection()
 
     cursor = connection.execute(
         """
         UPDATE time_budgets
-        SET weekly_minutes = weekly_minutes + ?
+        SET weekly_minutes =
+            weekly_minutes + ?
         WHERE user_id = ?
         """,
-        (extra_minutes, user_id)
+        (
+            extra_minutes,
+            user_id
+        )
     )
 
     connection.commit()
@@ -758,7 +984,9 @@ def extend_time_budget(user_id, extra_minutes):
     changed = cursor.rowcount > 0
 
     connection.close()
+
     return changed
+
 
 def reservation_conflicts_except(
     reservation_id,
@@ -803,30 +1031,64 @@ def update_reservation(
 ):
     connection = get_connection()
 
-    cursor = connection.execute(
-        """
-        UPDATE reservations
-        SET equipment_id = ?,
-            reservation_date = ?,
-            start_time = ?,
-            end_time = ?
-        WHERE id = ?
-        AND status = 'Scheduled'
-        """,
-        (
-            equipment_id,
-            reservation_date,
-            start_time,
-            end_time,
-            reservation_id
+    try:
+        connection.execute(
+            "BEGIN IMMEDIATE"
         )
-    )
 
-    connection.commit()
-    changed = cursor.rowcount > 0
-    connection.close()
+        conflict = connection.execute(
+            """
+            SELECT id
+            FROM reservations
+            WHERE equipment_id = ?
+            AND reservation_date = ?
+            AND status = 'Scheduled'
+            AND id != ?
+            AND start_time < ?
+            AND end_time > ?
+            """,
+            (
+                equipment_id,
+                reservation_date,
+                reservation_id,
+                end_time,
+                start_time
+            )
+        ).fetchone()
 
-    return changed
+        if conflict:
+            connection.rollback()
+            return False
+
+        cursor = connection.execute(
+            """
+            UPDATE reservations
+            SET equipment_id = ?,
+                reservation_date = ?,
+                start_time = ?,
+                end_time = ?
+            WHERE id = ?
+            AND status = 'Scheduled'
+            """,
+            (
+                equipment_id,
+                reservation_date,
+                start_time,
+                end_time,
+                reservation_id
+            )
+        )
+
+        connection.commit()
+
+        return cursor.rowcount > 0
+
+    except sqlite3.Error:
+        connection.rollback()
+        return False
+
+    finally:
+        connection.close()
 
 
 def get_next_reservation(user_id):
@@ -859,4 +1121,5 @@ def get_next_reservation(user_id):
     ).fetchone()
 
     connection.close()
+
     return reservation
