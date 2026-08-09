@@ -12,6 +12,10 @@ from app.database import (
     get_user
 )
 
+from app.experiment_manager import (
+    sync_experiment_catalog
+)
+
 from app.login_window import LoginWindow
 
 
@@ -20,13 +24,14 @@ app = QApplication(sys.argv)
 try:
     create_tables()
 
+    sync_experiment_catalog()
+
 except Exception as error:
     QMessageBox.critical(
         None,
         "Startup Error",
         (
-            "The application could not connect "
-            "to the database.\n\n"
+            "The application could not start.\n\n"
             f"{error}"
         )
     )
