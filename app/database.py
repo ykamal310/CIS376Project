@@ -648,6 +648,8 @@ def get_reservation_for_admin(reservation_id):
         SELECT
             id,
             user_id,
+            equipment_id,
+            reservation_date,
             start_time,
             end_time,
             status
@@ -757,3 +759,104 @@ def extend_time_budget(user_id, extra_minutes):
 
     connection.close()
     return changed
+
+def reservation_conflicts_except(
+    reservation_id,
+    equipment_id,
+    reservation_date,
+    start_time,
+    end_time
+):
+    connection = get_connection()
+
+    conflict = connection.execute(
+        """
+        SELECT id
+        FROM reservations
+        WHERE equipment_id = ?
+        AND reservation_date = ?
+        AND status = 'Scheduled'
+        AND id != ?
+        AND start_time < ?
+        AND end_time > ?
+        """,
+        (
+            equipment_id,
+            reservation_date,
+            reservation_id,
+            end_time,
+            start_time
+        )
+    ).fetchone()
+
+    connection.close()
+
+    return conflict is not None
+
+
+def update_reservation(
+    reservation_id,
+    equipment_id,
+    reservation_date,
+    start_time,
+    end_time
+):
+    connection = get_connection()
+
+    cursor = connection.execute(
+        """
+        UPDATE reservations
+        SET equipment_id = ?,
+            reservation_date = ?,
+            start_time = ?,
+            end_time = ?
+        WHERE id = ?
+        AND status = 'Scheduled'
+        """,
+        (
+            equipment_id,
+            reservation_date,
+            start_time,
+            end_time,
+            reservation_id
+        )
+    )
+
+    connection.commit()
+    changed = cursor.rowcount > 0
+    connection.close()
+
+    return changed
+
+
+def get_next_reservation(user_id):
+    connection = get_connection()
+
+    reservation = connection.execute(
+        """
+        SELECT
+            reservations.id,
+            reservations.reservation_date,
+            reservations.start_time,
+            reservations.end_time,
+            equipment.name AS equipment_name
+        FROM reservations
+        JOIN equipment
+        ON reservations.equipment_id = equipment.id
+        WHERE reservations.user_id = ?
+        AND reservations.status = 'Scheduled'
+        AND datetime(
+            reservations.reservation_date
+            || ' '
+            || reservations.end_time
+        ) >= datetime('now', 'localtime')
+        ORDER BY
+            reservations.reservation_date,
+            reservations.start_time
+        LIMIT 1
+        """,
+        (user_id,)
+    ).fetchone()
+
+    connection.close()
+    return reservation
