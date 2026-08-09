@@ -6,6 +6,8 @@ from app.database import (
     get_reservation,
     get_time_budget,
     reservation_conflicts,
+    reservation_conflicts_except,
+    update_reservation,
     update_used_minutes
 )
 
@@ -224,3 +226,109 @@ def cancel_user_reservation(user, reservation_id):
     )
 
     return True, "Reservation cancelled successfully."
+def modify_reservation(
+    user,
+    reservation_id,
+    equipment_id,
+    reservation_date,
+    start_time,
+    end_time
+):
+    reservation = get_reservation(
+        reservation_id,
+        user["id"]
+    )
+
+    if not reservation:
+        return False, "Reservation was not found."
+
+    if reservation["status"] != "Scheduled":
+        return False, "Only scheduled reservations can be changed."
+
+    try:
+        new_date = datetime.strptime(
+            reservation_date,
+            "%Y-%m-%d"
+        ).date()
+
+        new_start = datetime.strptime(
+            start_time,
+            "%H:%M"
+        ).time()
+
+        new_end = datetime.strptime(
+            end_time,
+            "%H:%M"
+        ).time()
+
+    except ValueError:
+        return False, "Invalid date or time."
+
+    start_date_time = datetime.combine(
+        new_date,
+        new_start
+    )
+
+    end_date_time = datetime.combine(
+        new_date,
+        new_end
+    )
+
+    if start_date_time <= datetime.now():
+        return False, "The new reservation must be in the future."
+
+    if end_date_time <= start_date_time:
+        return False, "End time must be after start time."
+
+    conflict = reservation_conflicts_except(
+        reservation_id,
+        equipment_id,
+        reservation_date,
+        start_time,
+        end_time
+    )
+
+    if conflict:
+        return False, "That time slot is already reserved."
+
+    old_minutes = get_duration_minutes(
+        reservation["start_time"],
+        reservation["end_time"]
+    )
+
+    new_minutes = get_duration_minutes(
+        start_time,
+        end_time
+    )
+
+    difference = new_minutes - old_minutes
+
+    if difference > 0:
+        remaining = get_remaining_minutes(
+            user["id"]
+        )
+
+        if difference > remaining:
+            return (
+                False,
+                "You do not have enough remaining lab time."
+            )
+
+    changed = update_reservation(
+        reservation_id,
+        equipment_id,
+        reservation_date,
+        start_time,
+        end_time
+    )
+
+    if not changed:
+        return False, "Reservation could not be changed."
+
+    if difference != 0:
+        update_used_minutes(
+            user["id"],
+            difference
+        )
+
+    return True, "Reservation updated successfully."
