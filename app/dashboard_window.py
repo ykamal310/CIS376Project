@@ -1,4 +1,5 @@
 from PyQt6.QtCore import pyqtSignal
+
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -14,9 +15,13 @@ from app.experiment_window import ExperimentWindow
 from app.history_window import HistoryWindow
 from app.reservation_window import ReservationWindow
 from app.session_manager import begin_session
+
 from app.database import (
     get_next_reservation,
-    get_time_budget
+    get_time_budget,
+    get_all_reservations,
+    get_all_equipment,
+    get_all_users
 )
 
 
@@ -33,37 +38,88 @@ class DashboardWindow(QWidget):
         self.history_window = None
         self.admin_window = None
 
-        self.setWindowTitle("Remote Lab Dashboard")
-        self.setFixedSize(400, 400)
+        self.setWindowTitle(
+            "Remote Lab Dashboard"
+        )
 
-        title = QLabel("Remote Laboratory Platform")
+        self.setFixedSize(
+            420,
+            450
+        )
+
+        title = QLabel(
+            "Remote Laboratory Platform"
+        )
+
         welcome = QLabel(
             f"Welcome, {user['username']}"
         )
+
         role = QLabel(
             f"Role: {user['role']}"
         )
 
-        self.next_reservation_label = QLabel()
-        self.time_label = QLabel()
-
         layout = QVBoxLayout()
+
         layout.addWidget(title)
         layout.addWidget(welcome)
         layout.addWidget(role)
 
         if user["role"] == "Administrator":
+            self.admin_reservation_label = QLabel()
+            self.admin_equipment_label = QLabel()
+            self.admin_users_label = QLabel()
+
+            layout.addWidget(
+                self.admin_reservation_label
+            )
+
+            layout.addWidget(
+                self.admin_equipment_label
+            )
+
+            layout.addWidget(
+                self.admin_users_label
+            )
+
             admin_button = QPushButton(
                 "Administrator Tools"
             )
 
-            layout.addWidget(admin_button)
+            refresh_button = QPushButton(
+                "Refresh Overview"
+            )
+
+            layout.addWidget(
+                admin_button
+            )
+
+            layout.addWidget(
+                refresh_button
+            )
 
             admin_button.clicked.connect(
                 self.open_admin_tools
             )
 
+            refresh_button.clicked.connect(
+                self.refresh_admin_dashboard
+            )
+
+            self.refresh_admin_dashboard()
+
         else:
+            self.next_reservation_label = QLabel()
+            self.time_label = QLabel()
+
+            layout.addWidget(
+                self.next_reservation_label
+            )
+
+            layout.addWidget(
+                self.time_label
+            )
+
             reservation_button = QPushButton(
                 "Reservations"
             )
@@ -76,16 +132,25 @@ class DashboardWindow(QWidget):
                 "Results History"
             )
 
-            refresh_dashboard_button = QPushButton(
-        "Refresh Dashboard"
+            refresh_button = QPushButton(
+                "Refresh Dashboard"
             )
 
-            layout.addWidget(self.next_reservation_label)
-            layout.addWidget(self.time_label)
-            layout.addWidget(reservation_button)
-            layout.addWidget(experiment_button)
-            layout.addWidget(history_button)
-            layout.addWidget(refresh_dashboard_button)
+            layout.addWidget(
+                reservation_button
+            )
+
+            layout.addWidget(
+                experiment_button
+            )
+
+            layout.addWidget(
+                history_button
+            )
+
+            layout.addWidget(
+                refresh_button
+            )
 
             reservation_button.clicked.connect(
                 self.open_reservations
@@ -99,7 +164,7 @@ class DashboardWindow(QWidget):
                 self.open_history
             )
 
-            refresh_dashboard_button.clicked.connect(
+            refresh_button.clicked.connect(
                 self.refresh_student_dashboard
             )
 
@@ -108,7 +173,9 @@ class DashboardWindow(QWidget):
                     "Debug: Launch Test Session"
                 )
 
-                layout.addWidget(debug_button)
+                layout.addWidget(
+                    debug_button
+                )
 
                 debug_button.clicked.connect(
                     self.open_debug_window
@@ -116,8 +183,13 @@ class DashboardWindow(QWidget):
 
             self.refresh_student_dashboard()
 
-        logout_button = QPushButton("Log Out")
-        layout.addWidget(logout_button)
+        logout_button = QPushButton(
+            "Log Out"
+        )
+
+        layout.addWidget(
+            logout_button
+        )
 
         logout_button.clicked.connect(
             self.logout
@@ -159,7 +231,9 @@ class DashboardWindow(QWidget):
             )
             return
 
-        self.launch_experiment_window(result)
+        self.launch_experiment_window(
+            result
+        )
 
     def open_debug_window(self):
         if (
@@ -184,7 +258,10 @@ class DashboardWindow(QWidget):
 
         window.exec()
 
-    def launch_experiment_window(self, session):
+    def launch_experiment_window(
+        self,
+        session
+    ):
         self.experiment_window = ExperimentWindow(
             self.user,
             session
@@ -228,22 +305,6 @@ class DashboardWindow(QWidget):
 
         self.admin_window.show()
 
-    def logout(self):
-        if self.reservation_window:
-            self.reservation_window.close()
-
-        if self.experiment_window:
-            self.experiment_window.close()
-
-        if self.history_window:
-            self.history_window.close()
-
-        if self.admin_window:
-            self.admin_window.close()
-
-        self.logged_out.emit()
-        self.close()
-
     def refresh_student_dashboard(self):
         if self.user["role"] != "Student":
             return
@@ -261,6 +322,7 @@ class DashboardWindow(QWidget):
                     f"{reservation['start_time']}"
                 )
             )
+
         else:
             self.next_reservation_label.setText(
                 "Next Reservation: None"
@@ -286,7 +348,59 @@ class DashboardWindow(QWidget):
                     f"{hours}h {minutes}m"
                 )
             )
+
         else:
             self.time_label.setText(
                 "Remaining Weekly Time: Not Available"
             )
+
+    def refresh_admin_dashboard(self):
+        if self.user["role"] != "Administrator":
+            return
+
+        reservations = get_all_reservations()
+        equipment = get_all_equipment()
+        users = get_all_users()
+
+        scheduled = 0
+
+        for reservation in reservations:
+            if reservation["status"] == "Scheduled":
+                scheduled += 1
+
+        available = 0
+
+        for item in equipment:
+            if item["status"] == "Available":
+                available += 1
+
+        self.admin_reservation_label.setText(
+            f"Scheduled Reservations: {scheduled}"
+        )
+
+        self.admin_equipment_label.setText(
+            (
+                "Equipment Available: "
+                f"{available} / {len(equipment)}"
+            )
+        )
+
+        self.admin_users_label.setText(
+            f"Registered Users: {len(users)}"
+        )
+
+    def logout(self):
+        if self.reservation_window:
+            self.reservation_window.close()
+
+        if self.experiment_window:
+            self.experiment_window.close()
+
+        if self.history_window:
+            self.history_window.close()
+
+        if self.admin_window:
+            self.admin_window.close()
+
+        self.logged_out.emit()
+        self.close()
