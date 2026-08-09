@@ -15,29 +15,17 @@ DATABASE = BASE_FOLDER / "data" / "remote_lab.db"
 
 
 def get_connection():
-    DATABASE.parent.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+    DATABASE.parent.mkdir(parents=True, exist_ok=True)
 
-    connection = sqlite3.connect(
-        DATABASE,
-        timeout=5
-    )
+    connection = sqlite3.connect(DATABASE, timeout=5)
 
     connection.row_factory = sqlite3.Row
 
-    connection.execute(
-        "PRAGMA foreign_keys = ON"
-    )
+    connection.execute("PRAGMA foreign_keys = ON")
 
-    connection.execute(
-        "PRAGMA busy_timeout = 5000"
-    )
+    connection.execute("PRAGMA busy_timeout = 5000")
 
-    connection.execute(
-        "PRAGMA journal_mode = WAL"
-    )
+    connection.execute("PRAGMA journal_mode = WAL")
 
     return connection
 
@@ -45,9 +33,7 @@ def get_connection():
 def get_current_week_start():
     today = date.today()
 
-    monday = today - timedelta(
-        days=today.weekday()
-    )
+    monday = today - timedelta(days=today.weekday())
 
     return monday.isoformat()
 
@@ -67,7 +53,8 @@ def create_tables():
         CREATE TABLE IF NOT EXISTS equipment (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            status TEXT DEFAULT 'Available'
+            status TEXT DEFAULT 'Available',
+            active INTEGER DEFAULT 1
         );
 
         CREATE TABLE IF NOT EXISTS reservations (
@@ -123,6 +110,21 @@ def create_tables():
         """
     )
 
+    equipment_columns = {
+        column["name"]
+        for column in connection.execute(
+            "PRAGMA table_info(equipment)"
+        ).fetchall()
+    }
+
+    if "active" not in equipment_columns:
+        connection.execute(
+            """
+            ALTER TABLE equipment
+            ADD COLUMN active INTEGER DEFAULT 1
+            """
+        )
+
     result_columns = {
         column["name"]
         for column in connection.execute(
@@ -170,54 +172,6 @@ def create_tables():
         (get_current_week_start(),)
     )
 
-    equipment_count = connection.execute(
-        "SELECT COUNT(*) FROM equipment"
-    ).fetchone()[0]
-
-    if equipment_count == 0:
-        connection.executemany(
-            """
-            INSERT INTO equipment (name)
-            VALUES (?)
-            """,
-            [
-                ("Chemistry Workstation",),
-                ("Electronics Workbench",),
-                ("Physics Simulation Station",)
-            ]
-        )
-
-    experiment_count = connection.execute(
-        "SELECT COUNT(*) FROM experiments"
-    ).fetchone()[0]
-
-    if experiment_count == 0:
-        connection.executemany(
-            """
-            INSERT INTO experiments (
-                name,
-                description
-            )
-            VALUES (?, ?)
-            """,
-            [
-                (
-                    "Ohm's Law",
-                    (
-                        "Calculate electrical current using "
-                        "voltage and resistance."
-                    )
-                ),
-                (
-                    "Pendulum Period",
-                    (
-                        "Calculate the period of a pendulum "
-                        "using length and gravitational acceleration."
-                    )
-                )
-            ]
-        )
-
     connection.commit()
     connection.close()
 
@@ -243,10 +197,7 @@ def add_user(username, password, role):
                 )
                 VALUES (?, ?)
                 """,
-                (
-                    cursor.lastrowid,
-                    get_current_week_start()
-                )
+                (cursor.lastrowid, get_current_week_start())
             )
 
         connection.commit()
@@ -283,20 +234,17 @@ def get_available_equipment():
         SELECT *
         FROM equipment
         WHERE status = 'Available'
+        AND active = 1
         ORDER BY name
         """
     ).fetchall()
 
     connection.close()
+
     return equipment
 
 
-def reservation_conflicts(
-    equipment_id,
-    reservation_date,
-    start_time,
-    end_time
-):
+def reservation_conflicts(equipment_id, reservation_date, start_time, end_time):
     connection = get_connection()
 
     conflict = connection.execute(
@@ -332,9 +280,7 @@ def add_reservation(
     connection = get_connection()
 
     try:
-        connection.execute(
-            "BEGIN IMMEDIATE"
-        )
+        connection.execute("BEGIN IMMEDIATE")
 
         conflict = connection.execute(
             """
@@ -425,10 +371,7 @@ def get_reservation(reservation_id, user_id):
         WHERE id = ?
         AND user_id = ?
         """,
-        (
-            reservation_id,
-            user_id
-        )
+        (reservation_id, user_id)
     ).fetchone()
 
     connection.close()
@@ -446,10 +389,7 @@ def cancel_reservation(reservation_id, user_id):
         AND user_id = ?
         AND status = 'Scheduled'
         """,
-        (
-            reservation_id,
-            user_id
-        )
+        (reservation_id, user_id)
     )
 
     connection.commit()
@@ -486,10 +426,7 @@ def get_time_budget(user_id):
                 week_start = ?
             WHERE user_id = ?
             """,
-            (
-                current_week,
-                user_id
-            )
+            (current_week, user_id)
         )
 
         connection.commit()
@@ -522,21 +459,14 @@ def update_used_minutes(user_id, minutes):
         )
         WHERE user_id = ?
         """,
-        (
-            minutes,
-            user_id
-        )
+        (minutes, user_id)
     )
 
     connection.commit()
     connection.close()
 
 
-def start_lab_session(
-    reservation_id,
-    user_id,
-    started_at
-):
+def start_lab_session(reservation_id, user_id, started_at):
     connection = get_connection()
 
     existing_session = connection.execute(
@@ -547,10 +477,7 @@ def start_lab_session(
         AND user_id = ?
         AND status = 'Active'
         """,
-        (
-            reservation_id,
-            user_id
-        )
+        (reservation_id, user_id)
     ).fetchone()
 
     if existing_session:
@@ -567,11 +494,7 @@ def start_lab_session(
         )
         VALUES (?, ?, ?)
         """,
-        (
-            reservation_id,
-            user_id,
-            started_at
-        )
+        (reservation_id, user_id, started_at)
     )
 
     connection.commit()
@@ -583,10 +506,7 @@ def start_lab_session(
     return session_id
 
 
-def end_lab_session(
-    session_id,
-    ended_at
-):
+def end_lab_session(session_id, ended_at):
     connection = get_connection()
 
     cursor = connection.execute(
@@ -597,10 +517,7 @@ def end_lab_session(
         WHERE id = ?
         AND status = 'Active'
         """,
-        (
-            ended_at,
-            session_id
-        )
+        (ended_at, session_id)
     )
 
     connection.commit()
@@ -753,6 +670,7 @@ def get_all_equipment():
         """
         SELECT id, name, status
         FROM equipment
+        WHERE active = 1
         ORDER BY name
         """
     ).fetchall()
@@ -761,11 +679,7 @@ def get_all_equipment():
 
     return equipment
 
-
-def update_equipment_status(
-    equipment_id,
-    new_status
-):
+def update_equipment_status(equipment_id, new_status):
     connection = get_connection()
 
     cursor = connection.execute(
@@ -774,10 +688,7 @@ def update_equipment_status(
         SET status = ?
         WHERE id = ?
         """,
-        (
-            new_status,
-            equipment_id
-        )
+        (new_status, equipment_id)
     )
 
     connection.commit()
@@ -819,9 +730,7 @@ def get_all_reservations():
     return reservations
 
 
-def get_reservation_for_admin(
-    reservation_id
-):
+def get_reservation_for_admin(reservation_id):
     connection = get_connection()
 
     reservation = connection.execute(
@@ -845,9 +754,7 @@ def get_reservation_for_admin(
     return reservation
 
 
-def mark_reservation_cancelled(
-    reservation_id
-):
+def mark_reservation_cancelled(reservation_id):
     connection = get_connection()
 
     cursor = connection.execute(
@@ -882,10 +789,7 @@ def get_all_users():
         WHERE week_start IS NULL
         OR week_start != ?
         """,
-        (
-            current_week,
-            current_week
-        )
+        (current_week, current_week)
     )
 
     connection.commit()
@@ -916,10 +820,7 @@ def get_all_users():
     return users
 
 
-def update_user_role(
-    user_id,
-    new_role
-):
+def update_user_role(user_id, new_role):
     connection = get_connection()
 
     cursor = connection.execute(
@@ -928,10 +829,7 @@ def update_user_role(
         SET role = ?
         WHERE id = ?
         """,
-        (
-            new_role,
-            user_id
-        )
+        (new_role, user_id)
     )
 
     if new_role == "Student":
@@ -945,10 +843,7 @@ def update_user_role(
             )
             VALUES (?, 300, 0, ?)
             """,
-            (
-                user_id,
-                get_current_week_start()
-            )
+            (user_id, get_current_week_start())
         )
 
     connection.commit()
@@ -960,10 +855,7 @@ def update_user_role(
     return changed
 
 
-def extend_time_budget(
-    user_id,
-    extra_minutes
-):
+def extend_time_budget(user_id, extra_minutes):
     connection = get_connection()
 
     cursor = connection.execute(
@@ -973,10 +865,7 @@ def extend_time_budget(
             weekly_minutes + ?
         WHERE user_id = ?
         """,
-        (
-            extra_minutes,
-            user_id
-        )
+        (extra_minutes, user_id)
     )
 
     connection.commit()
@@ -1032,9 +921,7 @@ def update_reservation(
     connection = get_connection()
 
     try:
-        connection.execute(
-            "BEGIN IMMEDIATE"
-        )
+        connection.execute("BEGIN IMMEDIATE")
 
         conflict = connection.execute(
             """
@@ -1123,3 +1010,99 @@ def get_next_reservation(user_id):
     connection.close()
 
     return reservation
+
+def get_or_create_experiment(name, description):
+    connection = get_connection()
+
+    experiment = connection.execute(
+        """
+        SELECT *
+        FROM experiments
+        WHERE name = ?
+        """,
+        (name,)
+    ).fetchone()
+
+    if experiment:
+        connection.close()
+        return experiment["id"]
+
+    cursor = connection.execute(
+        """
+        INSERT INTO experiments (
+            name,
+            description
+        )
+        VALUES (?, ?)
+        """,
+        (
+            name,
+            description
+        )
+    )
+
+    connection.commit()
+
+    experiment_id = cursor.lastrowid
+
+    connection.close()
+
+    return experiment_id
+
+def sync_equipment_catalog(
+    equipment_names
+):
+    unique_names = sorted(
+        {
+            name.strip()
+            for name in equipment_names
+            if name and name.strip()
+        }
+    )
+
+    connection = get_connection()
+
+    connection.execute(
+        """
+        UPDATE equipment
+        SET active = 0
+        """
+    )
+
+    for name in unique_names:
+        equipment = connection.execute(
+            """
+            SELECT id
+            FROM equipment
+            WHERE name = ?
+            ORDER BY id
+            LIMIT 1
+            """,
+            (name,)
+        ).fetchone()
+
+        if equipment:
+            connection.execute(
+                """
+                UPDATE equipment
+                SET active = 1
+                WHERE id = ?
+                """,
+                (equipment["id"],)
+            )
+
+        else:
+            connection.execute(
+                """
+                INSERT INTO equipment (
+                    name,
+                    status,
+                    active
+                )
+                VALUES (?, 'Available', 1)
+                """,
+                (name,)
+            )
+
+    connection.commit()
+    connection.close()

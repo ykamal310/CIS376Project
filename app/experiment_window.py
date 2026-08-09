@@ -1,8 +1,6 @@
 from datetime import datetime
 
-from matplotlib.backends.backend_qtagg import (
-    FigureCanvasQTAgg as FigureCanvas
-)
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 from PyQt6.QtCore import QTimer
@@ -17,12 +15,13 @@ from PyQt6.QtWidgets import (
     QMessageBox
 )
 
-from app.database import get_experiments
 from app.experiment_manager import (
+    get_available_experiments,
     get_experiment_fields,
     run_experiment,
     store_experiment_result
 )
+
 from app.session_manager import finish_session
 
 
@@ -36,24 +35,17 @@ class ExperimentWindow(QWidget):
         self.current_result = None
         self.session_finished = False
 
-        self.setWindowTitle(
-            "Active Laboratory Session"
-        )
+        self.setWindowTitle("Active Laboratory Session")
         self.setFixedSize(800, 700)
 
-        title = QLabel(
-            "Remote Laboratory Experiment"
-        )
+        title = QLabel("Remote Laboratory Experiment")
 
         student_label = QLabel(
             f"Student: {user['username']}"
         )
 
         equipment_label = QLabel(
-            (
-                "Equipment: "
-                f"{session['equipment_name']}"
-            )
+            f"Equipment: {session['equipment_name']}"
         )
 
         reservation_label = QLabel(
@@ -153,6 +145,7 @@ class ExperimentWindow(QWidget):
         self.load_experiments()
 
         self.timer = QTimer(self)
+
         self.timer.timeout.connect(
             self.update_remaining_time
         )
@@ -164,7 +157,13 @@ class ExperimentWindow(QWidget):
     def load_experiments(self):
         self.experiment_combo.clear()
 
-        experiments = get_experiments()
+        equipment_name = (
+            self.session["equipment_name"]
+        )
+
+        experiments = get_available_experiments(
+            equipment_name
+        )
 
         for experiment in experiments:
             self.experiment_combo.addItem(
@@ -182,7 +181,10 @@ class ExperimentWindow(QWidget):
 
         if not has_experiments:
             self.result_label.setText(
-                "No experiments are available."
+                (
+                    "No experiments are available "
+                    "for this equipment."
+                )
             )
 
         self.update_experiment_inputs()
@@ -191,6 +193,25 @@ class ExperimentWindow(QWidget):
         experiment_name = (
             self.experiment_combo.currentText()
         )
+
+        if not experiment_name:
+            self.first_input_label.setText(
+                "First Value:"
+            )
+
+            self.second_input_label.setText(
+                "Second Value:"
+            )
+
+            self.first_input.clear()
+            self.second_input.clear()
+
+            self.save_button.setEnabled(False)
+
+            self.axes.clear()
+            self.canvas.draw()
+
+            return
 
         first_label, second_label = (
             get_experiment_fields(
@@ -224,6 +245,14 @@ class ExperimentWindow(QWidget):
         experiment_name = (
             self.experiment_combo.currentText()
         )
+
+        if not experiment_name:
+            QMessageBox.warning(
+                self,
+                "Experiment Error",
+                "No experiment is available."
+            )
+            return
 
         success, result = run_experiment(
             experiment_name,
@@ -267,6 +296,7 @@ class ExperimentWindow(QWidget):
         self.axes.grid(True)
 
         self.figure.tight_layout()
+
         self.canvas.draw()
 
         self.save_button.setEnabled(True)
@@ -353,7 +383,9 @@ class ExperimentWindow(QWidget):
             remaining_seconds % 3600
         ) // 60
 
-        seconds = remaining_seconds % 60
+        seconds = (
+            remaining_seconds % 60
+        )
 
         self.remaining_time_label.setText(
             (
@@ -375,6 +407,7 @@ class ExperimentWindow(QWidget):
             return
 
         self.finish_current_session()
+
         self.close()
 
     def finish_current_session(
@@ -394,5 +427,7 @@ class ExperimentWindow(QWidget):
 
     def closeEvent(self, event):
         self.timer.stop()
+
         self.finish_current_session()
+
         event.accept()
