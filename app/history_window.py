@@ -26,13 +26,9 @@ class HistoryWindow(QWidget):
         self.setWindowTitle("Results History")
         self.setFixedSize(850, 650)
 
-        title = QLabel(
-            f"History for {user['username']}"
-        )
+        title = QLabel(f"History for {user['username']}")
 
-        reservation_title = QLabel(
-            "Previous Reservations"
-        )
+        reservation_title = QLabel("Previous Reservations")
 
         self.reservation_table = QTableWidget()
         self.reservation_table.setColumnCount(5)
@@ -47,17 +43,11 @@ class HistoryWindow(QWidget):
             ]
         )
 
-        self.reservation_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
-        )
+        self.reservation_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
-        self.reservation_table.setEditTriggers(
-            QTableWidget.EditTrigger.NoEditTriggers
-        )
+        self.reservation_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
 
-        result_title = QLabel(
-            "Saved Experiment Results"
-        )
+        result_title = QLabel("Saved Experiment Results")
 
         self.result_table = QTableWidget()
         self.result_table.setColumnCount(4)
@@ -71,13 +61,9 @@ class HistoryWindow(QWidget):
             ]
         )
 
-        self.result_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
-        )
+        self.result_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
-        self.result_table.setEditTriggers(
-            QTableWidget.EditTrigger.NoEditTriggers
-        )
+        self.result_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
 
         refresh_button = QPushButton("Refresh")
         close_button = QPushButton("Close")
@@ -96,13 +82,9 @@ class HistoryWindow(QWidget):
 
         self.setLayout(layout)
 
-        refresh_button.clicked.connect(
-            self.load_history
-        )
+        refresh_button.clicked.connect(self.load_history)
 
-        close_button.clicked.connect(
-            self.close
-        )
+        close_button.clicked.connect(self.close)
 
         self.load_history()
 
@@ -111,13 +93,9 @@ class HistoryWindow(QWidget):
         self.load_results()
 
     def load_reservations(self):
-        reservations = get_user_reservation_history(
-            self.user["id"]
-        )
+        reservations = get_user_reservation_history(self.user["id"])
 
-        self.reservation_table.setRowCount(
-            len(reservations)
-        )
+        self.reservation_table.setRowCount(len(reservations))
 
         for row, reservation in enumerate(reservations):
             values = [
@@ -129,37 +107,22 @@ class HistoryWindow(QWidget):
             ]
 
             for column, value in enumerate(values):
-                item = QTableWidgetItem(
-                    str(value)
-                )
+                item = QTableWidgetItem(str(value))
 
-                self.reservation_table.setItem(
-                    row,
-                    column,
-                    item
-                )
+                self.reservation_table.setItem(row, column, item)
 
     def load_results(self):
-        results = get_user_experiment_results(
-            self.user["id"]
-        )
+        results = get_user_experiment_results(self.user["id"])
 
-        self.result_table.setRowCount(
-            len(results)
-        )
+        self.result_table.setRowCount(len(results))
 
         for row, result in enumerate(results):
-            summary = self.get_result_summary(
-                result["result"]
-            )
+            summary = self.get_result_summary(result["result"])
 
             saved_at = result["created_at"]
 
             if saved_at:
-                saved_at = saved_at.replace(
-                    "T",
-                    " "
-                )
+                saved_at = saved_at.replace("T", " ")
             else:
                 saved_at = "Not recorded"
 
@@ -171,26 +134,15 @@ class HistoryWindow(QWidget):
             ]
 
             for column, value in enumerate(values):
-                item = QTableWidgetItem(
-                    str(value)
-                )
+                item = QTableWidgetItem(str(value))
 
-                self.result_table.setItem(
-                    row,
-                    column,
-                    item
-                )
+                self.result_table.setItem(row, column, item)
 
     def get_result_summary(self, result_text):
         try:
-            result_data = json.loads(
-                result_text
-            )
+            result_data = json.loads(result_text)
 
-            return result_data.get(
-                "summary",
-                result_text
-            )
+            return result_data.get("summary", result_text)
 
         except (
             json.JSONDecodeError,
