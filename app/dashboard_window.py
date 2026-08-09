@@ -14,6 +14,10 @@ from app.experiment_window import ExperimentWindow
 from app.history_window import HistoryWindow
 from app.reservation_window import ReservationWindow
 from app.session_manager import begin_session
+from app.database import (
+    get_next_reservation,
+    get_time_budget
+)
 
 
 class DashboardWindow(QWidget):
@@ -39,6 +43,9 @@ class DashboardWindow(QWidget):
         role = QLabel(
             f"Role: {user['role']}"
         )
+
+        self.next_reservation_label = QLabel()
+        self.time_label = QLabel()
 
         layout = QVBoxLayout()
         layout.addWidget(title)
@@ -69,9 +76,16 @@ class DashboardWindow(QWidget):
                 "Results History"
             )
 
+            refresh_dashboard_button = QPushButton(
+        "Refresh Dashboard"
+            )
+
+            layout.addWidget(self.next_reservation_label)
+            layout.addWidget(self.time_label)
             layout.addWidget(reservation_button)
             layout.addWidget(experiment_button)
             layout.addWidget(history_button)
+            layout.addWidget(refresh_dashboard_button)
 
             reservation_button.clicked.connect(
                 self.open_reservations
@@ -85,6 +99,10 @@ class DashboardWindow(QWidget):
                 self.open_history
             )
 
+            refresh_dashboard_button.clicked.connect(
+                self.refresh_student_dashboard
+            )
+
             if DEBUG_MODE:
                 debug_button = QPushButton(
                     "Debug: Launch Test Session"
@@ -95,6 +113,8 @@ class DashboardWindow(QWidget):
                 debug_button.clicked.connect(
                     self.open_debug_window
                 )
+
+            self.refresh_student_dashboard()
 
         logout_button = QPushButton("Log Out")
         layout.addWidget(logout_button)
@@ -223,3 +243,50 @@ class DashboardWindow(QWidget):
 
         self.logged_out.emit()
         self.close()
+
+    def refresh_student_dashboard(self):
+        if self.user["role"] != "Student":
+            return
+
+        reservation = get_next_reservation(
+            self.user["id"]
+        )
+
+        if reservation:
+            self.next_reservation_label.setText(
+                (
+                    "Next Reservation: "
+                    f"{reservation['equipment_name']} - "
+                    f"{reservation['reservation_date']} "
+                    f"{reservation['start_time']}"
+                )
+            )
+        else:
+            self.next_reservation_label.setText(
+                "Next Reservation: None"
+            )
+
+        budget = get_time_budget(
+            self.user["id"]
+        )
+
+        if budget:
+            remaining = max(
+                0,
+                budget["weekly_minutes"]
+                - budget["used_minutes"]
+            )
+
+            hours = remaining // 60
+            minutes = remaining % 60
+
+            self.time_label.setText(
+                (
+                    "Remaining Weekly Time: "
+                    f"{hours}h {minutes}m"
+                )
+            )
+        else:
+            self.time_label.setText(
+                "Remaining Weekly Time: Not Available"
+            )
