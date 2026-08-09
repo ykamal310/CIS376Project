@@ -679,3 +679,81 @@ def mark_reservation_cancelled(reservation_id):
     connection.close()
 
     return changed
+
+def get_all_users():
+    connection = get_connection()
+
+    users = connection.execute(
+        """
+        SELECT
+            users.id,
+            users.username,
+            users.role,
+            COALESCE(time_budgets.weekly_minutes, 0)
+                AS weekly_minutes,
+            COALESCE(time_budgets.used_minutes, 0)
+                AS used_minutes
+        FROM users
+        LEFT JOIN time_budgets
+        ON users.id = time_budgets.user_id
+        ORDER BY users.username
+        """
+    ).fetchall()
+
+    connection.close()
+    return users
+
+
+def update_user_role(user_id, new_role):
+    connection = get_connection()
+
+    cursor = connection.execute(
+        """
+        UPDATE users
+        SET role = ?
+        WHERE id = ?
+        """,
+        (new_role, user_id)
+    )
+
+    # if somebody becomes a student,
+    # make sure they have a time budget
+    if new_role == "Student":
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO time_budgets (
+                user_id,
+                weekly_minutes,
+                used_minutes
+            )
+            VALUES (?, 300, 0)
+            """,
+            (user_id,)
+        )
+
+    connection.commit()
+
+    changed = cursor.rowcount > 0
+
+    connection.close()
+    return changed
+
+
+def extend_time_budget(user_id, extra_minutes):
+    connection = get_connection()
+
+    cursor = connection.execute(
+        """
+        UPDATE time_budgets
+        SET weekly_minutes = weekly_minutes + ?
+        WHERE user_id = ?
+        """,
+        (extra_minutes, user_id)
+    )
+
+    connection.commit()
+
+    changed = cursor.rowcount > 0
+
+    connection.close()
+    return changed
