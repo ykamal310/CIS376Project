@@ -576,3 +576,106 @@ def get_user_experiment_results(user_id):
 
     connection.close()
     return results
+
+def get_all_equipment():
+    connection = get_connection()
+
+    equipment = connection.execute(
+        """
+        SELECT id, name, status
+        FROM equipment
+        ORDER BY name
+        """
+    ).fetchall()
+
+    connection.close()
+    return equipment
+
+
+def update_equipment_status(equipment_id, new_status):
+    connection = get_connection()
+
+    cursor = connection.execute(
+        """
+        UPDATE equipment
+        SET status = ?
+        WHERE id = ?
+        """,
+        (new_status, equipment_id)
+    )
+
+    connection.commit()
+    changed = cursor.rowcount > 0
+    connection.close()
+
+    return changed
+
+
+def get_all_reservations():
+    connection = get_connection()
+
+    reservations = connection.execute(
+        """
+        SELECT
+            reservations.id,
+            reservations.user_id,
+            users.username,
+            equipment.name AS equipment_name,
+            reservations.reservation_date,
+            reservations.start_time,
+            reservations.end_time,
+            reservations.status
+        FROM reservations
+        JOIN users
+        ON reservations.user_id = users.id
+        JOIN equipment
+        ON reservations.equipment_id = equipment.id
+        ORDER BY
+            reservations.reservation_date DESC,
+            reservations.start_time DESC
+        """
+    ).fetchall()
+
+    connection.close()
+    return reservations
+
+
+def get_reservation_for_admin(reservation_id):
+    connection = get_connection()
+
+    reservation = connection.execute(
+        """
+        SELECT
+            id,
+            user_id,
+            start_time,
+            end_time,
+            status
+        FROM reservations
+        WHERE id = ?
+        """,
+        (reservation_id,)
+    ).fetchone()
+
+    connection.close()
+    return reservation
+
+
+def mark_reservation_cancelled(reservation_id):
+    connection = get_connection()
+
+    cursor = connection.execute(
+        """
+        UPDATE reservations
+        SET status = 'Cancelled'
+        WHERE id = ?
+        AND status = 'Scheduled'
+        """,
+        (reservation_id,)
+    )
+
+    connection.commit()
+    changed = cursor.rowcount > 0
+    connection.close()
+
+    return changed
