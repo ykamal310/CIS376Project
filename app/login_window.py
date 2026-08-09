@@ -26,9 +26,7 @@ class CreateAccountDialog(QDialog):
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
 
         self.confirm_password = QLineEdit()
-        self.confirm_password.setEchoMode(
-            QLineEdit.EchoMode.Password
-        )
+        self.confirm_password.setEchoMode(QLineEdit.EchoMode.Password)
 
         self.create_button = QPushButton("Create Account")
         self.cancel_button = QPushButton("Cancel")
@@ -54,11 +52,7 @@ class CreateAccountDialog(QDialog):
         confirmation = self.confirm_password.text()
 
         if password != confirmation:
-            QMessageBox.warning(
-                self,
-                "Error",
-                "Passwords do not match."
-            )
+            QMessageBox.warning(self, "Error", "Passwords do not match.")
             return
 
         success, message = create_account(username, password)
@@ -105,17 +99,10 @@ class LoginWindow(QWidget):
         self.password.returnPressed.connect(self.log_in)
 
     def log_in(self):
-        user = login(
-            self.username.text(),
-            self.password.text()
-        )
+        user = login(self.username.text(), self.password.text())
 
         if not user:
-            QMessageBox.warning(
-                self,
-                "Login Failed",
-                "Incorrect username or password."
-            )
+            QMessageBox.warning(self, "Login Failed", "Incorrect username or password.")
             return
 
         self.dashboard = DashboardWindow(user)
