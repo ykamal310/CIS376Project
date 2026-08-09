@@ -9,24 +9,123 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QMessageBox,
     QTabWidget,
-    QSpinBox
+    QSpinBox,
+    QDialog,
+    QFormLayout,
+    QComboBox,
+    QDateEdit
 )
+
+from PyQt6.QtCore import QDate
 
 from app.database import (
     get_all_equipment,
     get_all_reservations,
-    get_all_users
+    get_all_users,
+    get_reservation_for_admin
 )
 
 from app.admin_manager import (
     change_equipment_status,
     cancel_admin_reservation,
     change_user_role,
-    add_student_time
+    add_student_time,
+    modify_admin_reservation
 )
 
+from app.reservation_manager import TIME_SLOTS
 
+class AdminReservationDialog(QDialog):
+    def __init__(self, reservation, parent=None):
+        super().__init__(parent)
 
+        self.setWindowTitle("Modify Reservation")
+        self.setFixedSize(350, 250)
+
+        self.equipment_combo = QComboBox()
+
+        equipment = get_all_equipment()
+
+        for item in equipment:
+            self.equipment_combo.addItem(
+                item["name"],
+                item["id"]
+            )
+
+            if item["id"] == reservation["equipment_id"]:
+                self.equipment_combo.setCurrentIndex(
+                    self.equipment_combo.count() - 1
+                )
+
+        self.date_input = QDateEdit()
+        self.date_input.setCalendarPopup(True)
+        self.date_input.setMinimumDate(
+            QDate.currentDate()
+        )
+
+        old_date = QDate.fromString(
+            reservation["reservation_date"],
+            "yyyy-MM-dd"
+        )
+
+        self.date_input.setDate(
+            old_date
+        )
+
+        self.time_combo = QComboBox()
+
+        for start, end in TIME_SLOTS:
+            text = f"{start} - {end}"
+
+            self.time_combo.addItem(
+                text,
+                (start, end)
+            )
+
+            if start == reservation["start_time"]:
+                self.time_combo.setCurrentIndex(
+                    self.time_combo.count() - 1
+                )
+
+        save_button = QPushButton(
+            "Save Changes"
+        )
+
+        cancel_button = QPushButton(
+            "Cancel"
+        )
+
+        form = QFormLayout()
+
+        form.addRow(
+            "Equipment:",
+            self.equipment_combo
+        )
+
+        form.addRow(
+            "Date:",
+            self.date_input
+        )
+
+        form.addRow(
+            "Time:",
+            self.time_combo
+        )
+
+        layout = QVBoxLayout()
+        layout.addLayout(form)
+        layout.addWidget(save_button)
+        layout.addWidget(cancel_button)
+
+        self.setLayout(layout)
+
+        save_button.clicked.connect(
+            self.accept
+        )
+
+        cancel_button.clicked.connect(
+            self.reject
+        )
 
 class AdminWindow(QWidget):
     def __init__(self, user):
@@ -169,12 +268,19 @@ class AdminWindow(QWidget):
             QTableWidget.EditTrigger.NoEditTriggers
         )
 
+        modify_button = QPushButton(
+            "Modify Selected Reservation"
+        )
         cancel_button = QPushButton(
             "Cancel Selected Reservation"
         )
 
         refresh_button = QPushButton(
             "Refresh Reservations"
+        )
+
+        modify_button.clicked.connect(
+            self.modify_reservation
         )
 
         cancel_button.clicked.connect(
@@ -186,6 +292,7 @@ class AdminWindow(QWidget):
         )
 
         buttons = QHBoxLayout()
+        buttons.addWidget(modify_button)
         buttons.addWidget(cancel_button)
         buttons.addWidget(refresh_button)
 
@@ -575,5 +682,81 @@ class AdminWindow(QWidget):
             QMessageBox.warning(
                 self,
                 "Update Failed",
+                message
+            )
+    def modify_reservation(self):
+        row = self.reservation_table.currentRow()
+
+        if row < 0:
+            QMessageBox.warning(
+                self,
+                "No Reservation Selected",
+                "Select a reservation first."
+            )
+            return
+
+        reservation_id = int(
+            self.reservation_table.item(
+                row,
+                0
+            ).text()
+        )
+
+        reservation = get_reservation_for_admin(
+            reservation_id
+        )
+
+        if not reservation:
+            QMessageBox.warning(
+                self,
+                "Error",
+                "Reservation was not found."
+            )
+            return
+
+        dialog = AdminReservationDialog(
+            reservation,
+            self
+        )
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        equipment_id = (
+            dialog.equipment_combo.currentData()
+        )
+
+        reservation_date = (
+            dialog.date_input.date().toString(
+                "yyyy-MM-dd"
+            )
+        )
+
+        start_time, end_time = (
+            dialog.time_combo.currentData()
+        )
+
+        success, message = modify_admin_reservation(
+            self.user,
+            reservation_id,
+            equipment_id,
+            reservation_date,
+            start_time,
+            end_time
+        )
+
+        if success:
+            QMessageBox.information(
+                self,
+                "Reservation Updated",
+                message
+            )
+
+            self.load_reservations()
+
+        else:
+            QMessageBox.warning(
+                self,
+                "Modification Failed",
                 message
             )
