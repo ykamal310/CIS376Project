@@ -65,16 +65,14 @@ class ReservationWindow(QWidget):
             ]
         )
 
-        self.reservation_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
-        )
+        self.reservation_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
         self.reservation_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
 
         self.reservation_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
 
         modify_button = QPushButton("Modify Selected Reservation")
-        
+
         cancel_button = QPushButton("Cancel Selected Reservation")
 
         refresh_button = QPushButton("Refresh")
@@ -130,10 +128,7 @@ class ReservationWindow(QWidget):
         equipment = get_available_equipment()
 
         for item in equipment:
-            self.equipment_combo.addItem(
-                item["name"],
-                item["id"]
-            )
+            self.equipment_combo.addItem(item["name"], item["id"])
 
         self.load_available_slots()
 
@@ -149,20 +144,12 @@ class ReservationWindow(QWidget):
 
         self.time_combo.setEnabled(True)
 
-        reservation_date = self.date_input.date().toString(
-            "yyyy-MM-dd"
-        )
+        reservation_date = self.date_input.date().toString("yyyy-MM-dd")
 
-        available_slots = get_available_slots(
-            equipment_id,
-            reservation_date
-        )
+        available_slots = get_available_slots(equipment_id, reservation_date)
 
         if not available_slots:
-            self.time_combo.addItem(
-                "No available time slots",
-                None
-            )
+            self.time_combo.addItem("No available time slots", None)
             return
 
         for slot in available_slots:
@@ -184,19 +171,11 @@ class ReservationWindow(QWidget):
         selected_slot = self.time_combo.currentData()
 
         if equipment_id is None:
-            QMessageBox.warning(
-                self,
-                "Reservation Error",
-                "Select available equipment."
-            )
+            QMessageBox.warning(self, "Reservation Error", "Select available equipment.")
             return
 
         if selected_slot is None:
-            QMessageBox.warning(
-                self,
-                "Reservation Error",
-                "Select an available time slot."
-            )
+            QMessageBox.warning(self, "Reservation Error", "Select an available time slot.")
             return
 
         start_time, end_time = selected_slot
@@ -212,17 +191,16 @@ class ReservationWindow(QWidget):
         )
 
         if success:
-            QMessageBox.information(self,"Reservation Created",message)
+            QMessageBox.information(self, "Reservation Created", message)
             self.refresh_window()
 
         else:
-            QMessageBox.warning(self,"Reservation Error",message)
+            QMessageBox.warning(self, "Reservation Error", message)
 
     def load_reservations(self):
         reservations = get_user_reservations(self.user["id"])
 
-        self.reservation_table.setRowCount(len(reservations)
-)
+        self.reservation_table.setRowCount(len(reservations))
 
         for row, reservation in enumerate(reservations):
             values = [
@@ -237,7 +215,7 @@ class ReservationWindow(QWidget):
             for column, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
 
-                self.reservation_table.setItem(row,column,item)
+                self.reservation_table.setItem(row, column, item)
 
     def load_time_budget(self):
         budget = get_time_budget(self.user["id"])
@@ -246,22 +224,24 @@ class ReservationWindow(QWidget):
             self.remaining_time_label.setText("Remaining Weekly Time: Not Available")
             return
 
-        remaining_minutes = max(0,budget["weekly_minutes"]- budget["used_minutes"])
+        remaining_minutes = max(0, budget["weekly_minutes"] - budget["used_minutes"])
 
         hours = remaining_minutes // 60
         minutes = remaining_minutes % 60
 
-        self.remaining_time_label.setText(f"Remaining Weekly Time: "f"{hours} hour(s), {minutes} minute(s)")
+        self.remaining_time_label.setText(
+            f"Remaining Weekly Time: "
+            f"{hours} hour(s), {minutes} minute(s)"
+        )
 
     def cancel_selected_reservation(self):
         selected_row = self.reservation_table.currentRow()
 
         if selected_row < 0:
-            QMessageBox.warning(self,"Cancellation Error","Select a reservation first.")
+            QMessageBox.warning(self, "Cancellation Error", "Select a reservation first.")
             return
 
-        reservation_id = int(
-            self.reservation_table.item(selected_row,0).text())
+        reservation_id = int(self.reservation_table.item(selected_row, 0).text())
 
         confirmation = QMessageBox.question(
             self,
@@ -272,26 +252,15 @@ class ReservationWindow(QWidget):
         if confirmation != QMessageBox.StandardButton.Yes:
             return
 
-        success, message = cancel_user_reservation(
-            self.user,
-            reservation_id
-        )
+        success, message = cancel_user_reservation(self.user, reservation_id)
 
         if success:
-            QMessageBox.information(
-                self,
-                "Reservation Cancelled",
-                message
-            )
+            QMessageBox.information(self, "Reservation Cancelled", message)
 
             self.refresh_window()
 
         else:
-            QMessageBox.warning(
-                self,
-                "Cancellation Error",
-                message
-            )
+            QMessageBox.warning(self, "Cancellation Error", message)
 
     def refresh_window(self):
         self.load_reservations()
@@ -302,24 +271,12 @@ class ReservationWindow(QWidget):
         row = self.reservation_table.currentRow()
 
         if row < 0:
-            QMessageBox.warning(
-                self,
-                "No Reservation Selected",
-                "Select a reservation first."
-            )
+            QMessageBox.warning(self, "No Reservation Selected", "Select a reservation first.")
             return
 
-        reservation_id = int(
-            self.reservation_table.item(
-                row,
-                0
-            ).text()
-        )
+        reservation_id = int(self.reservation_table.item(row, 0).text())
 
-        status = self.reservation_table.item(
-            row,
-            5
-        ).text()
+        status = self.reservation_table.item(row, 5).text()
 
         if status != "Scheduled":
             QMessageBox.warning(
@@ -342,11 +299,7 @@ class ReservationWindow(QWidget):
 
         start_time, end_time = selected_slot
 
-        reservation_date = (
-            self.date_input.date().toString(
-                "yyyy-MM-dd"
-            )
-        )
+        reservation_date = self.date_input.date().toString("yyyy-MM-dd")
 
         answer = QMessageBox.question(
             self,
@@ -370,17 +323,9 @@ class ReservationWindow(QWidget):
         )
 
         if success:
-            QMessageBox.information(
-                self,
-                "Reservation Updated",
-                message
-            )
+            QMessageBox.information(self, "Reservation Updated", message)
 
             self.refresh_window()
 
         else:
-            QMessageBox.warning(
-                self,
-                "Modification Failed",
-                message
-            )
+            QMessageBox.warning(self, "Modification Failed", message)
