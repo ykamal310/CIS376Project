@@ -1,0 +1,321 @@
+from PyQt6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QMessageBox,
+    QTabWidget
+)
+
+from app.database import (
+    get_all_equipment,
+    get_all_reservations
+)
+
+from app.admin_manager import (
+    change_equipment_status,
+    cancel_admin_reservation
+)
+
+
+class AdminWindow(QWidget):
+    def __init__(self, user):
+        super().__init__()
+
+        self.user = user
+
+        self.setWindowTitle("Administrator Tools")
+        self.setFixedSize(900, 600)
+
+        title = QLabel(
+            f"Administrator: {user['username']}"
+        )
+
+        tabs = QTabWidget()
+
+        equipment_tab = QWidget()
+        reservation_tab = QWidget()
+
+        tabs.addTab(
+            equipment_tab,
+            "Equipment"
+        )
+
+        tabs.addTab(
+            reservation_tab,
+            "Reservations"
+        )
+
+        self.setup_equipment_tab(
+            equipment_tab
+        )
+
+        self.setup_reservation_tab(
+            reservation_tab
+        )
+
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(self.close)
+
+        layout = QVBoxLayout()
+        layout.addWidget(title)
+        layout.addWidget(tabs)
+        layout.addWidget(close_button)
+
+        self.setLayout(layout)
+
+        self.load_equipment()
+        self.load_reservations()
+
+    def setup_equipment_tab(self, tab):
+        self.equipment_table = QTableWidget()
+        self.equipment_table.setColumnCount(3)
+
+        self.equipment_table.setHorizontalHeaderLabels(
+            [
+                "ID",
+                "Equipment",
+                "Status"
+            ]
+        )
+
+        self.equipment_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+
+        self.equipment_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+
+        self.equipment_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+
+        toggle_button = QPushButton(
+            "Change Selected Status"
+        )
+
+        refresh_button = QPushButton(
+            "Refresh Equipment"
+        )
+
+        toggle_button.clicked.connect(
+            self.toggle_equipment
+        )
+
+        refresh_button.clicked.connect(
+            self.load_equipment
+        )
+
+        buttons = QHBoxLayout()
+        buttons.addWidget(toggle_button)
+        buttons.addWidget(refresh_button)
+
+        layout = QVBoxLayout()
+        layout.addWidget(
+            QLabel("Laboratory Equipment")
+        )
+        layout.addWidget(self.equipment_table)
+        layout.addLayout(buttons)
+
+        tab.setLayout(layout)
+
+    def setup_reservation_tab(self, tab):
+        self.reservation_table = QTableWidget()
+        self.reservation_table.setColumnCount(7)
+
+        self.reservation_table.setHorizontalHeaderLabels(
+            [
+                "ID",
+                "Student",
+                "Equipment",
+                "Date",
+                "Start",
+                "End",
+                "Status"
+            ]
+        )
+
+        self.reservation_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+
+        self.reservation_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+
+        self.reservation_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+
+        cancel_button = QPushButton(
+            "Cancel Selected Reservation"
+        )
+
+        refresh_button = QPushButton(
+            "Refresh Reservations"
+        )
+
+        cancel_button.clicked.connect(
+            self.cancel_reservation
+        )
+
+        refresh_button.clicked.connect(
+            self.load_reservations
+        )
+
+        buttons = QHBoxLayout()
+        buttons.addWidget(cancel_button)
+        buttons.addWidget(refresh_button)
+
+        layout = QVBoxLayout()
+        layout.addWidget(
+            QLabel("All Student Reservations")
+        )
+        layout.addWidget(self.reservation_table)
+        layout.addLayout(buttons)
+
+        tab.setLayout(layout)
+
+    def load_equipment(self):
+        equipment = get_all_equipment()
+
+        self.equipment_table.setRowCount(
+            len(equipment)
+        )
+
+        for row, item in enumerate(equipment):
+            values = [
+                item["id"],
+                item["name"],
+                item["status"]
+            ]
+
+            for column, value in enumerate(values):
+                self.equipment_table.setItem(
+                    row,
+                    column,
+                    QTableWidgetItem(str(value))
+                )
+
+    def load_reservations(self):
+        reservations = get_all_reservations()
+
+        self.reservation_table.setRowCount(
+            len(reservations)
+        )
+
+        for row, reservation in enumerate(reservations):
+            values = [
+                reservation["id"],
+                reservation["username"],
+                reservation["equipment_name"],
+                reservation["reservation_date"],
+                reservation["start_time"],
+                reservation["end_time"],
+                reservation["status"]
+            ]
+
+            for column, value in enumerate(values):
+                self.reservation_table.setItem(
+                    row,
+                    column,
+                    QTableWidgetItem(str(value))
+                )
+
+    def toggle_equipment(self):
+        row = self.equipment_table.currentRow()
+
+        if row < 0:
+            QMessageBox.warning(
+                self,
+                "No Equipment Selected",
+                "Select an equipment row first."
+            )
+            return
+
+        equipment_id = int(
+            self.equipment_table.item(
+                row,
+                0
+            ).text()
+        )
+
+        current_status = (
+            self.equipment_table.item(
+                row,
+                2
+            ).text()
+        )
+
+        success, message = change_equipment_status(
+            self.user,
+            equipment_id,
+            current_status
+        )
+
+        if success:
+            QMessageBox.information(
+                self,
+                "Equipment Updated",
+                message
+            )
+
+            self.load_equipment()
+        else:
+            QMessageBox.warning(
+                self,
+                "Update Failed",
+                message
+            )
+
+    def cancel_reservation(self):
+        row = self.reservation_table.currentRow()
+
+        if row < 0:
+            QMessageBox.warning(
+                self,
+                "No Reservation Selected",
+                "Select a reservation first."
+            )
+            return
+
+        reservation_id = int(
+            self.reservation_table.item(
+                row,
+                0
+            ).text()
+        )
+
+        answer = QMessageBox.question(
+            self,
+            "Cancel Reservation",
+            "Cancel the selected reservation?"
+        )
+
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        success, message = cancel_admin_reservation(
+            self.user,
+            reservation_id
+        )
+
+        if success:
+            QMessageBox.information(
+                self,
+                "Reservation Cancelled",
+                message
+            )
+
+            self.load_reservations()
+        else:
+            QMessageBox.warning(
+                self,
+                "Cancellation Failed",
+                message
+            )
