@@ -22,20 +22,11 @@ class DebugWindow(QDialog):
 
         self.user = user
 
-        self.setWindowTitle(
-            "Debug Session Launcher"
-        )
+        self.setWindowTitle("Debug Session Launcher")
 
-        self.setFixedSize(
-            400,
-            260
-        )
+        self.setFixedSize(400, 260)
 
-        title = QLabel(
-            "Development Testing Mode"
-        )
-
-
+        title = QLabel("Development Testing Mode")
 
         self.equipment_combo = QComboBox()
 
@@ -44,23 +35,13 @@ class DebugWindow(QDialog):
         self.duration_input.setValue(10)
         self.duration_input.setSuffix(" minute(s)")
 
-        launch_button = QPushButton(
-            "Launch Debug Session"
-        )
+        launch_button = QPushButton("Launch Debug Session")
 
-        cancel_button = QPushButton(
-            "Cancel"
-        )
+        cancel_button = QPushButton("Cancel")
 
         form = QFormLayout()
-        form.addRow(
-            "Equipment:",
-            self.equipment_combo
-        )
-        form.addRow(
-            "Session Duration:",
-            self.duration_input
-        )
+        form.addRow("Equipment:", self.equipment_combo)
+        form.addRow("Session Duration:", self.duration_input)
 
         layout = QVBoxLayout()
         layout.addWidget(title)
@@ -70,13 +51,9 @@ class DebugWindow(QDialog):
 
         self.setLayout(layout)
 
-        launch_button.clicked.connect(
-            self.launch_session
-        )
+        launch_button.clicked.connect(self.launch_session)
 
-        cancel_button.clicked.connect(
-            self.reject
-        )
+        cancel_button.clicked.connect(self.reject)
 
         self.load_equipment()
 
@@ -86,29 +63,17 @@ class DebugWindow(QDialog):
         equipment = get_available_equipment()
 
         for item in equipment:
-            self.equipment_combo.addItem(
-                item["name"],
-                item["id"]
-            )
+            self.equipment_combo.addItem(item["name"], item["id"])
 
         if self.equipment_combo.count() == 0:
-            self.equipment_combo.addItem(
-                "No equipment available",
-                None
-            )
+            self.equipment_combo.addItem("No equipment available", None)
 
     def launch_session(self):
-        equipment_id = (
-            self.equipment_combo.currentData()
-        )
+        equipment_id = self.equipment_combo.currentData()
 
-        equipment_name = (
-            self.equipment_combo.currentText()
-        )
+        equipment_name = self.equipment_combo.currentText()
 
-        duration_minutes = (
-            self.duration_input.value()
-        )
+        duration_minutes = self.duration_input.value()
 
         success, result = create_debug_session(
             self.user,
@@ -118,11 +83,7 @@ class DebugWindow(QDialog):
         )
 
         if not success:
-            QMessageBox.warning(
-                self,
-                "Debug Session Error",
-                result
-            )
+            QMessageBox.warning(self, "Debug Session Error", result)
             return
 
         self.session_created.emit(result)

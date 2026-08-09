@@ -6,6 +6,10 @@ from pathlib import Path
 
 import app.database as database
 
+from app.experiment_manager import (
+    sync_experiment_catalog
+)
+
 from app.authentication import (
     create_account,
     login
@@ -33,6 +37,7 @@ class RemoteLabTests(unittest.TestCase):
         )
 
         database.create_tables()
+        sync_experiment_catalog()
 
         create_account(
             "student1",
