@@ -11,9 +11,7 @@ from app.database import (
 def get_active_reservation(user_id):
     current_time = datetime.now()
 
-    reservations = get_user_reservations(
-        user_id
-    )
+    reservations = get_user_reservations(user_id)
 
     for reservation in reservations:
         if reservation["status"] != "Scheduled":
@@ -43,30 +41,16 @@ def get_active_reservation(user_id):
 
 def begin_session(user):
     if user["role"] != "Student":
-        return (
-            False,
-            "Only students can access laboratory sessions."
-        )
+        return False, "Only students can access laboratory sessions."
 
-    reservation = get_active_reservation(
-        user["id"]
-    )
+    reservation = get_active_reservation(user["id"])
 
     if not reservation:
-        return (
-            False,
-            "You do not have an active reservation."
-        )
+        return False, "You do not have an active reservation."
 
-    started_at = datetime.now().isoformat(
-        timespec="seconds"
-    )
+    started_at = datetime.now().isoformat(timespec="seconds")
 
-    session_id = start_lab_session(
-        reservation["id"],
-        user["id"],
-        started_at
-    )
+    session_id = start_lab_session(reservation["id"], user["id"], started_at)
 
     session = {
         "session_id": session_id,
@@ -80,21 +64,10 @@ def begin_session(user):
     return True, session
 
 
-def finish_session(
-    session_id,
-    reservation_id=None,
-    reservation_expired=False
-):
-    ended_at = datetime.now().isoformat(
-        timespec="seconds"
-    )
+def finish_session(session_id, reservation_id=None, reservation_expired=False):
+    ended_at = datetime.now().isoformat(timespec="seconds")
 
-    end_lab_session(
-        session_id,
-        ended_at
-    )
+    end_lab_session(session_id, ended_at)
 
     if reservation_expired and reservation_id:
-        complete_reservation(
-            reservation_id
-        )
+        complete_reservation(reservation_id)
