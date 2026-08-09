@@ -24,7 +24,10 @@ TIME_SLOTS = [
 ]
 
 
-def get_duration_minutes(start_time, end_time):
+def get_duration_minutes(
+    start_time,
+    end_time
+):
     start_value = datetime.strptime(
         start_time,
         "%H:%M"
@@ -37,7 +40,9 @@ def get_duration_minutes(start_time, end_time):
 
     duration = end_value - start_value
 
-    return int(duration.total_seconds() / 60)
+    return int(
+        duration.total_seconds() / 60
+    )
 
 
 def get_remaining_minutes(user_id):
@@ -48,11 +53,15 @@ def get_remaining_minutes(user_id):
 
     return max(
         0,
-        budget["weekly_minutes"] - budget["used_minutes"]
+        budget["weekly_minutes"]
+        - budget["used_minutes"]
     )
 
 
-def get_available_slots(equipment_id, reservation_date):
+def get_available_slots(
+    equipment_id,
+    reservation_date
+):
     try:
         selected_date = datetime.strptime(
             reservation_date,
@@ -105,7 +114,10 @@ def create_reservation(
     end_time
 ):
     if user["role"] != "Student":
-        return False, "Only students can create reservations."
+        return (
+            False,
+            "Only students can create reservations."
+        )
 
     try:
         selected_date = datetime.strptime(
@@ -124,7 +136,10 @@ def create_reservation(
         ).time()
 
     except ValueError:
-        return False, "Invalid reservation date or time."
+        return (
+            False,
+            "Invalid reservation date or time."
+        )
 
     start_date_time = datetime.combine(
         selected_date,
@@ -137,13 +152,22 @@ def create_reservation(
     )
 
     if selected_date < date.today():
-        return False, "Reservations cannot be created in the past."
+        return (
+            False,
+            "Reservations cannot be created in the past."
+        )
 
     if start_date_time <= datetime.now():
-        return False, "The selected reservation time has already passed."
+        return (
+            False,
+            "The selected reservation time has already passed."
+        )
 
     if end_date_time <= start_date_time:
-        return False, "The end time must be after the start time."
+        return (
+            False,
+            "The end time must be after the start time."
+        )
 
     if reservation_conflicts(
         equipment_id,
@@ -151,7 +175,10 @@ def create_reservation(
         start_time,
         end_time
     ):
-        return False, "This time slot is already reserved."
+        return (
+            False,
+            "This time slot is already reserved."
+        )
 
     duration = get_duration_minutes(
         start_time,
@@ -168,7 +195,7 @@ def create_reservation(
             "This reservation exceeds your remaining lab time."
         )
 
-    add_reservation(
+    reservation_id = add_reservation(
         user["id"],
         equipment_id,
         reservation_date,
@@ -176,25 +203,43 @@ def create_reservation(
         end_time
     )
 
+    if reservation_id is None:
+        return (
+            False,
+            "This time slot is no longer available."
+        )
+
     update_used_minutes(
         user["id"],
         duration
     )
 
-    return True, "Reservation created successfully."
+    return (
+        True,
+        "Reservation created successfully."
+    )
 
 
-def cancel_user_reservation(user, reservation_id):
+def cancel_user_reservation(
+    user,
+    reservation_id
+):
     reservation = get_reservation(
         reservation_id,
         user["id"]
     )
 
     if not reservation:
-        return False, "Reservation could not be found."
+        return (
+            False,
+            "Reservation could not be found."
+        )
 
     if reservation["status"] != "Scheduled":
-        return False, "This reservation is not active."
+        return (
+            False,
+            "This reservation is not active."
+        )
 
     start_date_time = datetime.strptime(
         (
@@ -205,7 +250,10 @@ def cancel_user_reservation(user, reservation_id):
     )
 
     if start_date_time <= datetime.now():
-        return False, "Only future reservations can be cancelled."
+        return (
+            False,
+            "Only future reservations can be cancelled."
+        )
 
     duration = get_duration_minutes(
         reservation["start_time"],
@@ -218,14 +266,22 @@ def cancel_user_reservation(user, reservation_id):
     )
 
     if not cancelled:
-        return False, "The reservation could not be cancelled."
+        return (
+            False,
+            "The reservation could not be cancelled."
+        )
 
     update_used_minutes(
         user["id"],
         -duration
     )
 
-    return True, "Reservation cancelled successfully."
+    return (
+        True,
+        "Reservation cancelled successfully."
+    )
+
+
 def modify_reservation(
     user,
     reservation_id,
@@ -240,10 +296,16 @@ def modify_reservation(
     )
 
     if not reservation:
-        return False, "Reservation was not found."
+        return (
+            False,
+            "Reservation was not found."
+        )
 
     if reservation["status"] != "Scheduled":
-        return False, "Only scheduled reservations can be changed."
+        return (
+            False,
+            "Only scheduled reservations can be changed."
+        )
 
     try:
         new_date = datetime.strptime(
@@ -262,7 +324,10 @@ def modify_reservation(
         ).time()
 
     except ValueError:
-        return False, "Invalid date or time."
+        return (
+            False,
+            "Invalid date or time."
+        )
 
     start_date_time = datetime.combine(
         new_date,
@@ -275,10 +340,16 @@ def modify_reservation(
     )
 
     if start_date_time <= datetime.now():
-        return False, "The new reservation must be in the future."
+        return (
+            False,
+            "The new reservation must be in the future."
+        )
 
     if end_date_time <= start_date_time:
-        return False, "End time must be after start time."
+        return (
+            False,
+            "End time must be after start time."
+        )
 
     conflict = reservation_conflicts_except(
         reservation_id,
@@ -289,7 +360,10 @@ def modify_reservation(
     )
 
     if conflict:
-        return False, "That time slot is already reserved."
+        return (
+            False,
+            "That time slot is already reserved."
+        )
 
     old_minutes = get_duration_minutes(
         reservation["start_time"],
@@ -301,7 +375,9 @@ def modify_reservation(
         end_time
     )
 
-    difference = new_minutes - old_minutes
+    difference = (
+        new_minutes - old_minutes
+    )
 
     if difference > 0:
         remaining = get_remaining_minutes(
@@ -323,7 +399,10 @@ def modify_reservation(
     )
 
     if not changed:
-        return False, "Reservation could not be changed."
+        return (
+            False,
+            "Reservation could not be changed."
+        )
 
     if difference != 0:
         update_used_minutes(
@@ -331,4 +410,7 @@ def modify_reservation(
             difference
         )
 
-    return True, "Reservation updated successfully."
+    return (
+        True,
+        "Reservation updated successfully."
+    )
