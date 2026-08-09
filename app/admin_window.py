@@ -8,18 +8,24 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QMessageBox,
-    QTabWidget
+    QTabWidget,
+    QSpinBox
 )
 
 from app.database import (
     get_all_equipment,
-    get_all_reservations
+    get_all_reservations,
+    get_all_users
 )
 
 from app.admin_manager import (
     change_equipment_status,
-    cancel_admin_reservation
+    cancel_admin_reservation,
+    change_user_role,
+    add_student_time
 )
+
+
 
 
 class AdminWindow(QWidget):
@@ -39,6 +45,7 @@ class AdminWindow(QWidget):
 
         equipment_tab = QWidget()
         reservation_tab = QWidget()
+        user_tab = QWidget()
 
         tabs.addTab(
             equipment_tab,
@@ -50,12 +57,21 @@ class AdminWindow(QWidget):
             "Reservations"
         )
 
+        tabs.addTab(
+            user_tab,
+            "Users"
+        )
+
         self.setup_equipment_tab(
             equipment_tab
         )
 
         self.setup_reservation_tab(
             reservation_tab
+        )
+
+        self.setup_user_tab(
+            user_tab
         )
 
         close_button = QPushButton("Close")
@@ -70,6 +86,7 @@ class AdminWindow(QWidget):
 
         self.load_equipment()
         self.load_reservations()
+        self.load_users()
 
     def setup_equipment_tab(self, tab):
         self.equipment_table = QTableWidget()
@@ -180,6 +197,193 @@ class AdminWindow(QWidget):
         layout.addLayout(buttons)
 
         tab.setLayout(layout)
+
+    def setup_user_tab(self, tab):
+        self.user_table = QTableWidget()
+        self.user_table.setColumnCount(6)
+
+        self.user_table.setHorizontalHeaderLabels(
+            [
+                "ID",
+                "Username",
+                "Role",
+                "Weekly Minutes",
+                "Used Minutes",
+                "Remaining"
+            ]
+        )
+
+        self.user_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+
+        self.user_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+
+        self.user_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+
+        role_button = QPushButton(
+            "Change Selected User Role"
+        )
+
+        self.extra_minutes = QSpinBox()
+        self.extra_minutes.setRange(15, 300)
+        self.extra_minutes.setValue(60)
+        self.extra_minutes.setSingleStep(15)
+        self.extra_minutes.setSuffix(" minutes")
+
+        time_button = QPushButton(
+            "Add Time to Student"
+        )
+
+        refresh_button = QPushButton(
+            "Refresh Users"
+        )
+
+        role_button.clicked.connect(
+            self.change_selected_role
+        )
+
+        time_button.clicked.connect(
+            self.add_time
+        )
+
+        refresh_button.clicked.connect(
+            self.load_users
+        )
+
+        time_layout = QHBoxLayout()
+        time_layout.addWidget(
+            QLabel("Extra Time:")
+        )
+        time_layout.addWidget(
+            self.extra_minutes
+        )
+        time_layout.addWidget(
+            time_button
+        )
+
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(
+            role_button
+        )
+        button_layout.addWidget(
+            refresh_button
+        )
+
+        layout = QVBoxLayout()
+        layout.addWidget(
+            QLabel("User Accounts and Lab Time")
+        )
+        layout.addWidget(
+            self.user_table
+        )
+        layout.addLayout(
+            time_layout
+        )
+        layout.addLayout(
+            button_layout
+        )
+
+        tab.setLayout(layout)
+
+    def load_users(self):
+        users = get_all_users()
+
+        self.user_table.setRowCount(
+            len(users)
+        )
+
+        for row, user in enumerate(users):
+            weekly = user["weekly_minutes"]
+            used = user["used_minutes"]
+
+            remaining = max(
+                0,
+                weekly - used
+            )
+
+            values = [
+                user["id"],
+                user["username"],
+                user["role"],
+                weekly,
+                used,
+                remaining
+            ]
+
+            for column, value in enumerate(values):
+                self.user_table.setItem(
+                    row,
+                    column,
+                    QTableWidgetItem(
+                        str(value)
+                    )
+                )
+    def change_selected_role(self):
+        row = self.user_table.currentRow()
+
+        if row < 0:
+            QMessageBox.warning(
+                self,
+                "No User Selected",
+                "Select a user first."
+            )
+            return
+
+        user_id = int(
+            self.user_table.item(
+                row,
+                0
+            ).text()
+        )
+
+        username = self.user_table.item(
+            row,
+            1
+        ).text()
+
+        current_role = self.user_table.item(
+            row,
+            2
+        ).text()
+
+        answer = QMessageBox.question(
+            self,
+            "Change Role",
+            (
+                f"Change the role for "
+                f"{username}?"
+            )
+        )
+
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        success, message = change_user_role(
+            self.user,
+            user_id,
+            current_role
+        )
+
+        if success:
+            QMessageBox.information(
+                self,
+                "Role Updated",
+                message
+            )
+
+            self.load_users()
+
+        else:
+            QMessageBox.warning(
+                self,
+                "Role Change Failed",
+                message
+            )
 
     def load_equipment(self):
         equipment = get_all_equipment()
@@ -317,5 +521,59 @@ class AdminWindow(QWidget):
             QMessageBox.warning(
                 self,
                 "Cancellation Failed",
+                message
+            )
+    def add_time(self):
+        row = self.user_table.currentRow()
+
+        if row < 0:
+            QMessageBox.warning(
+                self,
+                "No User Selected",
+                "Select a student first."
+            )
+            return
+
+        user_id = int(
+            self.user_table.item(
+                row,
+                0
+            ).text()
+        )
+
+        role = self.user_table.item(
+            row,
+            2
+        ).text()
+
+        if role != "Student":
+            QMessageBox.warning(
+                self,
+                "Invalid User",
+                "Lab time can only be added to students."
+            )
+            return
+
+        minutes = self.extra_minutes.value()
+
+        success, message = add_student_time(
+            self.user,
+            user_id,
+            minutes
+        )
+
+        if success:
+            QMessageBox.information(
+                self,
+                "Time Added",
+                message
+            )
+
+            self.load_users()
+
+        else:
+            QMessageBox.warning(
+                self,
+                "Update Failed",
                 message
             )
